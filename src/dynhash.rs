@@ -6,6 +6,7 @@ use std::hash::{Hash, Hasher};
 pub trait DynEq: Any {
     fn dyn_eq(&self, other: &dyn DynEq) -> bool;
     fn as_any(&self) -> &dyn Any;
+    fn as_any_box(self: Box<Self>) -> Box<dyn Any>;
 }
 
 pub trait DynHash: DynEq {
@@ -22,6 +23,10 @@ impl<H: Eq + Any> DynEq for H {
     }
 
     fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_box(self: Box<Self>) -> Box<dyn Any> {
         self
     }
 }
@@ -42,13 +47,9 @@ pub(crate) trait DowncastDynHash: Sized {
 
 impl DowncastDynHash for Box<dyn DynHash> {
     fn downcast<T: Any>(self) -> Result<Box<T>, Self> {
-        // This is copy-paste from Box<dyn Any> implementation adjusted for DynHash trait
         if (&*self).as_any().is::<T>() {
-            // SAFETY: Same as Box<dyn Any>::downcast()
-            unsafe {
-                let raw: *mut dyn DynHash = Box::into_raw(self);
-                Ok(Box::from_raw(raw as *mut T))
-            }
+            let downcasted = self.as_any_box().downcast().expect("Broken Any downcast");
+            Ok(downcasted)
         } else {
             Err(self)
         }
@@ -58,11 +59,11 @@ impl DowncastDynHash for Box<dyn DynHash> {
 impl DowncastDynHash for Box<dyn DynHash + 'static + Send + Sync> {
     fn downcast<T: Any>(self) -> Result<Box<T>, Self> {
         if (&*self).as_any().is::<T>() {
-            // SAFETY: Same as Box<dyn Any + Send + Sync>::downcast()
-            unsafe {
-                let raw: *mut (dyn DynHash + Send + Sync) = Box::into_raw(self);
-                Ok(Box::from_raw(raw as *mut T))
-            }
+            let downcasted = self
+                .as_any_box()
+                .downcast()
+                .expect("Broken Any + Send + Sync downcast");
+            Ok(downcasted)
         } else {
             Err(self)
         }
