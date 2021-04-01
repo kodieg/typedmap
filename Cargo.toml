@@ -1,6 +1,6 @@
 [package]
 name = "typedmap"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Konrad Gołuchowski <kodieg@gmail.com>"]
 edition = "2018"
 description = "A hash map (dash map). A type of value is defined by trait implemented on key type"
@@ -12,3 +12,6 @@ readme = "README.md"
 
 [dependencies]
 dashmap = { version = "4.0", optional = true }
+
+[package.metadata.docs.rs]
+all-features = true
