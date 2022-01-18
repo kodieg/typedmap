@@ -498,7 +498,7 @@ where
     /// assert!(letters.get(&Key('y')).is_none());
     /// ```
     pub fn entry<K: 'static + TypedMapKey<Marker> + Send + Sync>(
-        &mut self,
+        &self,
         key: K,
     ) -> dashentry::Entry<'_, K, Marker, S>
     where
