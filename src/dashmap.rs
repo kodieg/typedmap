@@ -487,7 +487,7 @@ where
     ///     type Value = usize;
     /// }
     ///
-    /// let mut letters: TypedDashMap = TypedDashMap::new();
+    /// let letters: TypedDashMap = TypedDashMap::new();
     /// for ch in "a short treatise on fungi".chars() {
     ///    let mut counter = letters.entry(Key(ch)).or_insert(0);
     ///    *counter += 1;
