@@ -9,3 +9,7 @@
 # 0.2.0 (January 20, 2022)
 
 - Changed signature of TypedDashMap::entry to require &self instead of &mut self ([PR 3](https://github.com/kodieg/typedmap/pull/3)).
+
+# 0.3.0 (June 15, 2022)
+
+- Update version of dash map to 5.3.4
