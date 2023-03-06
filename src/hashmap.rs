@@ -4,6 +4,7 @@ use std::iter::FusedIterator;
 use std::{any::Any, fmt::Debug, ops::Index};
 use std::{collections::hash_map::RandomState, marker::PhantomData};
 
+use crate::bounds::{AnyBounds, Bounds, HasBounds};
 use crate::entry;
 use crate::typedkey::{Key, TypedKey, TypedKeyRef};
 use crate::typedvalue::TypedMapValue;
@@ -21,6 +22,11 @@ const INVALID_VALUE: &str = "Broken TypedMap: invalid value type";
 /// A map that can store keys of any type that implements [`TypedMapKey`] and values
 /// of type defined by [`TypedMapKey::Value`]. One can use Marker to define multiple
 /// "key-value" type mappings. Under the hood the [`std::collections::HashMap`] is used.
+///
+/// `KB` and `VB` type parameters may be used to add additional bounds for accepted either key types
+/// or value types. This crate provides [`crate::bounds::AnyBounds`], [`crate::bounds::SyncAnyBounds`] and if `clone`
+/// feature is enabled [`crate::clone::CloneBounds`] and [`crate::clone::SyncCloneBounds`]. However, it is possible
+/// to implement custom bounds as shown in [`crate::bounds`] example.
 ///
 /// # Examples
 /// ```
@@ -84,8 +90,8 @@ const INVALID_VALUE: &str = "Broken TypedMap: invalid value type";
 /// assert_eq!(default[&ServiceB("zero")], "one".to_owned());
 ///
 /// ```
-pub struct TypedMap<Marker = (), S = RandomState> {
-    state: HashMap<TypedKey, TypedMapValue, S>,
+pub struct TypedMap<Marker = (), KB: Bounds = AnyBounds, VB: Bounds = AnyBounds, S = RandomState> {
+    state: HashMap<TypedKey<KB>, TypedMapValue<VB>, S>,
     _phantom: PhantomData<Marker>,
 }
 
@@ -100,10 +106,7 @@ impl<Marker> TypedMap<Marker> {
     /// let map = TypedMap::<Configs>::new();
     /// ```
     pub fn new() -> Self {
-        TypedMap {
-            state: Default::default(),
-            _phantom: PhantomData,
-        }
+        TypedMap::new_with_bounds()
     }
 
     /// Creates a new TypedMap with a specified capacity and specified marker type
@@ -115,9 +118,24 @@ impl<Marker> TypedMap<Marker> {
     }
 }
 
-impl<Marker, S> TypedMap<Marker, S>
+impl<Marker, KB, VB> TypedMap<Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+    pub fn new_with_bounds() -> Self {
+        TypedMap {
+            state: Default::default(),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<Marker, KB, VB, S> TypedMap<Marker, KB, VB, S>
 where
     S: BuildHasher,
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
 {
     /// Creates a new TypedMap with specified capacity, hasher and marker type.
     pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S) -> Self {
@@ -157,11 +175,12 @@ where
     /// map.insert(Key(3), 4);
     /// assert_eq!(map[&Key(3)], 4);
     /// ```
-    pub fn insert<K: 'static + TypedMapKey<Marker>>(
-        &mut self,
-        key: K,
-        value: K::Value,
-    ) -> Option<K::Value> {
+    pub fn insert<K>(&mut self, key: K, value: K::Value) -> Option<K::Value>
+    where
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+        K: 'static + TypedMapKey<Marker>,
+    {
         let typed_key = TypedKey::from_key(key);
         let value = TypedMapValue::from_value(value);
         let old_value = self.state.insert(typed_key, value);
@@ -187,7 +206,12 @@ where
     /// assert_eq!(map.get(&Key(3)), Some(&4));
     /// assert_eq!(map.get(&Key(4)), None);
     /// ```
-    pub fn get<K: 'static + TypedMapKey<Marker>>(&self, key: &K) -> Option<&K::Value> {
+    pub fn get<K>(&self, key: &K) -> Option<&K::Value>
+    where
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+        K: 'static + TypedMapKey<Marker>,
+    {
         let typed_key = TypedKeyRef::from_key_ref(key);
         let value = self.state.get(&typed_key as &dyn Key)?;
         Some(value.downcast_ref::<K::Value>().expect(INVALID_VALUE))
@@ -216,7 +240,12 @@ where
     /// }
     /// assert_eq!(map.get(&key), Some(&5));
     /// ```
-    pub fn get_mut<K: 'static + TypedMapKey<Marker>>(&mut self, key: &K) -> Option<&mut K::Value> {
+    pub fn get_mut<K>(&mut self, key: &K) -> Option<&mut K::Value>
+    where
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+        K: 'static + TypedMapKey<Marker>,
+    {
         let typed_key = TypedKeyRef::from_key_ref(key);
         let value = self.state.get_mut(&typed_key as &dyn Key)?;
         Some(value.downcast_mut::<K::Value>().expect(INVALID_VALUE))
@@ -241,10 +270,12 @@ where
     /// assert_eq!(map.get_key_value(&Key(3)), Some((&Key(3), &4)));
     /// assert_eq!(map.get(&Key(4)), None);
     /// ```
-    pub fn get_key_value<K: 'static + TypedMapKey<Marker>>(
-        &self,
-        key: &K,
-    ) -> Option<(&K, &K::Value)> {
+    pub fn get_key_value<K>(&self, key: &K) -> Option<(&K, &K::Value)>
+    where
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+        K: 'static + TypedMapKey<Marker>,
+    {
         let typed_key = TypedKeyRef::from_key_ref(key);
         let (key, value) = self.state.get_key_value(&typed_key as &dyn Key)?;
 
@@ -273,10 +304,15 @@ where
     /// assert_eq!(map.remove(&Key(3)), Some(4));
     /// assert_eq!(map.get(&Key(3)), None);
     /// ```
-    pub fn remove<K: 'static + TypedMapKey<Marker>>(&mut self, key: &K) -> Option<K::Value> {
+    pub fn remove<K>(&mut self, key: &K) -> Option<K::Value>
+    where
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+        K: 'static + TypedMapKey<Marker>,
+    {
         let typed_key = TypedKeyRef::from_key_ref(key);
         let value = self.state.remove(&typed_key as &dyn Key)?;
-        Some(value.downcast::<K::Value>().ok().expect(INVALID_VALUE))
+        Some(value.downcast::<K::Value>().expect(INVALID_VALUE))
     }
 
     /// Removes a key from the map, returning the stored key and value if the key was previously in the map.
@@ -298,15 +334,17 @@ where
     /// assert_eq!(map.remove_entry(&Key(3)), Some((Key(3), 4)));
     /// assert_eq!(map.remove(&Key(3)), None);
     /// ```
-    pub fn remove_entry<K: 'static + TypedMapKey<Marker>>(
-        &mut self,
-        key: &K,
-    ) -> Option<(K, K::Value)> {
+    pub fn remove_entry<K>(&mut self, key: &K) -> Option<(K, K::Value)>
+    where
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+        K: 'static + TypedMapKey<Marker>,
+    {
         let typed_key = TypedKeyRef::from_key_ref(key);
         let value = self.state.remove_entry(&typed_key as &dyn Key);
         value.map(|(k, v)| {
-            let k = k.downcast::<K>().ok().expect(INVALID_KEY);
-            let v = v.downcast::<K::Value>().ok().expect(INVALID_VALUE);
+            let k = k.downcast::<K>().expect(INVALID_KEY);
+            let v = v.downcast::<K::Value>().expect(INVALID_VALUE);
             (k, v)
         })
     }
@@ -335,10 +373,12 @@ where
     /// assert_eq!(letters.get(&Key('u')), Some(&1));
     /// assert_eq!(letters.get(&Key('y')), None);
     /// ```
-    pub fn entry<K: 'static + TypedMapKey<Marker>>(
-        &mut self,
-        key: K,
-    ) -> entry::Entry<'_, K, Marker> {
+    pub fn entry<K>(&mut self, key: K) -> entry::Entry<'_, K, KB, VB, Marker>
+    where
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+        K: 'static + TypedMapKey<Marker>,
+    {
         let typed_key = TypedKey::from_key(key);
         entry::map_entry(self.state.entry(typed_key))
     }
@@ -362,7 +402,12 @@ where
     /// assert!(map.contains_key(&Key(3)));
     /// assert!(!map.contains_key(&Key(4)));
     /// ```
-    pub fn contains_key<K: 'static + TypedMapKey<Marker>>(&self, key: &K) -> bool {
+    pub fn contains_key<K>(&self, key: &K) -> bool
+    where
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+        K: 'static + TypedMapKey<Marker>,
+    {
         self.get(key).is_some()
     }
 
@@ -522,7 +567,7 @@ where
     ///     assert!(found);
     /// }
     /// ```
-    pub fn keys(&self) -> Keys<'_> {
+    pub fn keys(&self) -> Keys<'_, KB, VB> {
         Keys(self.state.keys())
     }
 
@@ -563,7 +608,7 @@ where
     ///     assert!(found);
     /// }
     /// ```
-    pub fn values(&self) -> Values<'_> {
+    pub fn values(&self) -> Values<'_, KB, VB> {
         Values(self.state.values())
     }
 
@@ -607,7 +652,7 @@ where
     /// assert_eq!(map[&Key(3)], 4);
     /// assert_eq!(map[&SKey("four")], 6);
     /// ```
-    pub fn values_mut(&mut self) -> ValuesMut<'_> {
+    pub fn values_mut(&mut self) -> ValuesMut<'_, KB, VB> {
         ValuesMut(self.state.values_mut())
     }
 
@@ -649,7 +694,7 @@ where
     ///     }
     /// }
     /// ```
-    pub fn drain(&mut self) -> Drain<'_, Marker> {
+    pub fn drain(&mut self) -> Drain<'_, Marker, KB, VB> {
         Drain(self.state.drain(), PhantomData)
     }
 
@@ -689,7 +734,7 @@ where
     ///     }
     /// }
     /// ```
-    pub fn iter(&self) -> Iter<'_, Marker> {
+    pub fn iter(&self) -> Iter<'_, Marker, KB, VB> {
         Iter(self.state.iter(), PhantomData)
     }
 
@@ -733,7 +778,7 @@ where
     /// assert_eq!(map[&Key(3)], 4);
     /// assert_eq!(map[&SKey("four")], 5);
     /// ```
-    pub fn iter_mut(&mut self) -> IterMut<'_, Marker> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, Marker, KB, VB> {
         IterMut(self.state.iter_mut(), PhantomData)
     }
 
@@ -768,9 +813,9 @@ where
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
-        F: FnMut(TypedKeyValueMutRef<'_, Marker>) -> bool,
+        F: FnMut(TypedKeyValueMutRef<'_, Marker, KB, VB>) -> bool,
     {
-        let g = move |key: &TypedKey, value: &mut TypedMapValue| {
+        let g = move |key: &TypedKey<KB>, value: &mut TypedMapValue<VB>| {
             f(TypedKeyValueMutRef {
                 key,
                 value,
@@ -781,22 +826,37 @@ where
     }
 }
 
-impl<Marker> Default for TypedMap<Marker> {
+impl<Marker, KB, VB> Default for TypedMap<Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
     fn default() -> Self {
-        TypedMap::new()
+        TypedMap::new_with_bounds()
     }
 }
 
-impl<Marker> IntoIterator for TypedMap<Marker> {
-    type IntoIter = IntoIter<Marker>;
-    type Item = TypedKeyValue<Marker>;
+impl<Marker, KB, VB, S> IntoIterator for TypedMap<Marker, KB, VB, S>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+    S: BuildHasher,
+{
+    type Item = TypedKeyValue<Marker, KB, VB>;
+    type IntoIter = IntoIter<Marker, KB, VB>;
 
     fn into_iter(self) -> Self::IntoIter {
         IntoIter(self.state.into_iter(), PhantomData)
     }
 }
 
-impl<Marker, K: 'static + TypedMapKey<Marker>, S: BuildHasher> Index<&K> for TypedMap<Marker, S> {
+impl<Marker, K, S, KB, VB> Index<&K> for TypedMap<Marker, KB, VB, S>
+where
+    K: 'static + TypedMapKey<Marker>,
+    S: BuildHasher,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
+{
     type Output = K::Value;
 
     fn index(&self, key: &K) -> &K::Value {
@@ -827,13 +887,17 @@ impl<Marker, K: 'static + TypedMapKey<Marker>, S: BuildHasher> Index<&K> for Typ
 /// let iter = map.iter();
 ///
 #[derive(Clone)]
-pub struct Iter<'a, Marker>(
-    std::collections::hash_map::Iter<'a, TypedKey, TypedMapValue>,
+pub struct Iter<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds>(
+    std::collections::hash_map::Iter<'a, TypedKey<KB>, TypedMapValue<VB>>,
     PhantomData<Marker>,
 );
 
-impl<'a, Marker> Iterator for Iter<'a, Marker> {
-    type Item = TypedKeyValueRef<'a, Marker>;
+impl<'a, Marker, KB, VB> Iterator for Iter<'a, Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+    type Item = TypedKeyValueRef<'a, Marker, KB, VB>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let (key, value) = self.0.next()?;
@@ -849,8 +913,18 @@ impl<'a, Marker> Iterator for Iter<'a, Marker> {
     }
 }
 
-impl<Marker> ExactSizeIterator for Iter<'_, Marker> {}
-impl<Marker> FusedIterator for Iter<'_, Marker> {}
+impl<Marker, KB, VB> ExactSizeIterator for Iter<'_, Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+}
+impl<Marker, KB, VB> FusedIterator for Iter<'_, Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+}
 
 /// A mutable iterator over the entries of a TypedMap
 ///
@@ -874,13 +948,17 @@ impl<Marker> FusedIterator for Iter<'_, Marker> {}
 /// map.insert(Key(3), 3);
 /// let iter = map.iter_mut();
 /// ```
-pub struct IterMut<'a, Marker>(
-    std::collections::hash_map::IterMut<'a, TypedKey, TypedMapValue>,
+pub struct IterMut<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds>(
+    std::collections::hash_map::IterMut<'a, TypedKey<KB>, TypedMapValue<VB>>,
     PhantomData<Marker>,
 );
 
-impl<'a, Marker> Iterator for IterMut<'a, Marker> {
-    type Item = TypedKeyValueMutRef<'a, Marker>;
+impl<'a, Marker, KB, VB> Iterator for IterMut<'a, Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+    type Item = TypedKeyValueMutRef<'a, Marker, KB, VB>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let (key, value) = self.0.next()?;
@@ -896,9 +974,19 @@ impl<'a, Marker> Iterator for IterMut<'a, Marker> {
     }
 }
 
-impl<Marker> ExactSizeIterator for IterMut<'_, Marker> {}
-impl<Marker> FusedIterator for IterMut<'_, Marker> {}
-
+impl<Marker, KB, VB> ExactSizeIterator for IterMut<'_, Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+}
+impl<Marker, KB, VB> FusedIterator for IterMut<'_, Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+}
+//
 /// An draining iterator over the entries of a `TypedMap`.
 ///
 /// This `struct` is created by the [`drain`] method on [`TypedMap`].
@@ -922,13 +1010,15 @@ impl<Marker> FusedIterator for IterMut<'_, Marker> {}
 /// map.insert(Key(3), 3);
 /// let iter = map.into_iter();
 /// ```
-pub struct Drain<'a, Marker>(
-    std::collections::hash_map::Drain<'a, TypedKey, TypedMapValue>,
+pub struct Drain<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds>(
+    std::collections::hash_map::Drain<'a, TypedKey<KB>, TypedMapValue<VB>>,
     PhantomData<Marker>,
 );
 
-impl<'a, Marker> Iterator for Drain<'a, Marker> {
-    type Item = TypedKeyValue<Marker>;
+impl<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds> Iterator
+    for Drain<'a, Marker, KB, VB>
+{
+    type Item = TypedKeyValue<Marker, KB, VB>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let (key, value) = self.0.next()?;
@@ -944,8 +1034,14 @@ impl<'a, Marker> Iterator for Drain<'a, Marker> {
     }
 }
 
-impl<Marker> ExactSizeIterator for Drain<'_, Marker> {}
-impl<Marker> FusedIterator for Drain<'_, Marker> {}
+impl<Marker, KB: 'static + Bounds, VB: 'static + Bounds> ExactSizeIterator
+    for Drain<'_, Marker, KB, VB>
+{
+}
+impl<Marker, KB: 'static + Bounds, VB: 'static + Bounds> FusedIterator
+    for Drain<'_, Marker, KB, VB>
+{
+}
 
 /// An owning iterator over the entries of a `TypedMap`.
 ///
@@ -969,13 +1065,17 @@ impl<Marker> FusedIterator for Drain<'_, Marker> {}
 /// let mut map: TypedMap = TypedMap::new();
 /// map.insert(Key(3), 3);
 /// ```
-pub struct IntoIter<Marker>(
-    std::collections::hash_map::IntoIter<TypedKey, TypedMapValue>,
+pub struct IntoIter<Marker, KB: 'static + Bounds, VB: 'static + Bounds>(
+    std::collections::hash_map::IntoIter<TypedKey<KB>, TypedMapValue<VB>>,
     PhantomData<Marker>,
 );
 
-impl<Marker> Iterator for IntoIter<Marker> {
-    type Item = TypedKeyValue<Marker>;
+impl<Marker, KB, VB> Iterator for IntoIter<Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+    type Item = TypedKeyValue<Marker, KB, VB>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let (key, value) = self.0.next()?;
@@ -991,8 +1091,18 @@ impl<Marker> Iterator for IntoIter<Marker> {
     }
 }
 
-impl<Marker> ExactSizeIterator for IntoIter<Marker> {}
-impl<Marker> FusedIterator for IntoIter<Marker> {}
+impl<Marker, KB, VB> ExactSizeIterator for IntoIter<Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+}
+impl<Marker, KB, VB> FusedIterator for IntoIter<Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+}
 
 /// An iterator over the keys of a `HashMap`.
 ///
@@ -1019,9 +1129,11 @@ impl<Marker> FusedIterator for IntoIter<Marker> {}
 /// let iter = map.keys();
 /// ```
 #[derive(Clone)]
-pub struct Keys<'a>(std::collections::hash_map::Keys<'a, TypedKey, TypedMapValue>);
+pub struct Keys<'a, KB: 'static + Bounds, VB: 'static + Bounds>(
+    std::collections::hash_map::Keys<'a, TypedKey<KB>, TypedMapValue<VB>>,
+);
 
-impl<'a> Iterator for Keys<'a> {
+impl<'a, KB: 'static + Bounds, VB: 'static + Bounds> Iterator for Keys<'a, KB, VB> {
     type Item = &'a dyn Any;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1034,8 +1146,18 @@ impl<'a> Iterator for Keys<'a> {
     }
 }
 
-impl ExactSizeIterator for Keys<'_> {}
-impl FusedIterator for Keys<'_> {}
+impl<KB, VB> ExactSizeIterator for Keys<'_, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+}
+impl<KB, VB> FusedIterator for Keys<'_, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+}
 
 /// An iterator over the values of a `HashMap`.
 ///
@@ -1062,9 +1184,11 @@ impl FusedIterator for Keys<'_> {}
 /// let iter = map.values();
 /// ```
 #[derive(Clone)]
-pub struct Values<'a>(std::collections::hash_map::Values<'a, TypedKey, TypedMapValue>);
+pub struct Values<'a, KB: 'static + Bounds, VB: 'static + Bounds>(
+    std::collections::hash_map::Values<'a, TypedKey<KB>, TypedMapValue<VB>>,
+);
 
-impl<'a> Iterator for Values<'a> {
+impl<'a, KB: 'static + Bounds, VB: 'static + Bounds> Iterator for Values<'a, KB, VB> {
     type Item = &'a dyn Any;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1077,8 +1201,18 @@ impl<'a> Iterator for Values<'a> {
     }
 }
 
-impl ExactSizeIterator for Values<'_> {}
-impl FusedIterator for Values<'_> {}
+impl<KB, VB> ExactSizeIterator for Values<'_, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+}
+impl<KB, VB> FusedIterator for Values<'_, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+}
 
 /// An mutable iterator over the values of a `HashMap`.
 ///
@@ -1104,9 +1238,15 @@ impl FusedIterator for Values<'_> {}
 /// map.insert(Key(3), 3);
 /// let iter = map.values();
 /// ```
-pub struct ValuesMut<'a>(std::collections::hash_map::ValuesMut<'a, TypedKey, TypedMapValue>);
+pub struct ValuesMut<'a, KB: 'static + Bounds, VB: 'static + Bounds>(
+    std::collections::hash_map::ValuesMut<'a, TypedKey<KB>, TypedMapValue<VB>>,
+);
 
-impl<'a> Iterator for ValuesMut<'a> {
+impl<'a, KB, VB> Iterator for ValuesMut<'a, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
     type Item = &'a mut dyn Any;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1119,24 +1259,44 @@ impl<'a> Iterator for ValuesMut<'a> {
     }
 }
 
-impl ExactSizeIterator for ValuesMut<'_> {}
-impl FusedIterator for ValuesMut<'_> {}
+impl<KB, VB> ExactSizeIterator for ValuesMut<'_, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+}
+impl<KB, VB> FusedIterator for ValuesMut<'_, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+}
 
 /// Represents owned pair of key and value.
-pub struct TypedKeyValue<Marker> {
-    key: TypedKey,
-    value: TypedMapValue,
+pub struct TypedKeyValue<Marker, KB: 'static + Bounds, VB: 'static + Bounds> {
+    key: TypedKey<KB>,
+    value: TypedMapValue<VB>,
     _marker: PhantomData<Marker>,
 }
 
-impl<Marker> TypedKeyValue<Marker> {
+impl<Marker, KB, VB> TypedKeyValue<Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
     /// Downcast key to reference of `K`. Returns `None` if not possible.
-    pub fn downcast_key_ref<K: 'static + TypedMapKey<Marker>>(&self) -> Option<&K> {
+    pub fn downcast_key_ref<K: 'static + TypedMapKey<Marker>>(&self) -> Option<&K>
+    where
+        KB: HasBounds<K>,
+    {
         self.key.downcast_ref()
     }
 
     /// Downcast key to the owned value of type `K`. Returns Err(Self) if not possible.
-    pub fn downcast_key<K: 'static + TypedMapKey<Marker>>(self) -> Result<K, Self> {
+    pub fn downcast_key<K: 'static + TypedMapKey<Marker>>(self) -> Result<K, Self>
+    where
+        KB: HasBounds<K>,
+    {
         let Self {
             key,
             value,
@@ -1149,13 +1309,21 @@ impl<Marker> TypedKeyValue<Marker> {
         })
     }
 
+    // FIXME: downcast_key_mut, downcast_value_mut, downcast_pair_mut?
+
     /// Downcast key to reference of `V`. Returns `None` if not possible.
-    pub fn downcast_value_ref<V: Any>(&self) -> Option<&V> {
+    pub fn downcast_value_ref<V: 'static>(&self) -> Option<&V>
+    where
+        VB: HasBounds<V>,
+    {
         self.value.downcast_ref()
     }
 
     /// Downcast key to the owned value of type `V`. Returns Err(Self) if not possible.
-    pub fn downcast_value<V: Any>(self) -> Result<V, Self> {
+    pub fn downcast_value<V: 'static>(self) -> Result<V, Self>
+    where
+        VB: HasBounds<V>,
+    {
         let Self {
             key,
             value,
@@ -1170,7 +1338,12 @@ impl<Marker> TypedKeyValue<Marker> {
 
     /// Downcast key to reference of `K` and value to reference of `K::Value`.
     /// Returns `None` if not possible.
-    pub fn downcast_pair_ref<K: 'static + TypedMapKey<Marker>>(&self) -> Option<(&K, &K::Value)> {
+    pub fn downcast_pair_ref<K>(&self) -> Option<(&K, &K::Value)>
+    where
+        K: 'static + TypedMapKey<Marker>,
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+    {
         let key = self.downcast_key_ref()?;
         let value = self.downcast_value_ref()?;
         Some((key, value))
@@ -1178,7 +1351,12 @@ impl<Marker> TypedKeyValue<Marker> {
 
     /// Downcast key to owned value of type `K` and value to owned value of type `K::Value`.
     /// Returns Err(Self) if not possible.
-    pub fn downcast_pair<K: 'static + TypedMapKey<Marker>>(self) -> Result<(K, K::Value), Self> {
+    pub fn downcast_pair<K>(self) -> Result<(K, K::Value), Self>
+    where
+        K: 'static + TypedMapKey<Marker>,
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+    {
         let Self {
             key,
             value,
@@ -1200,59 +1378,115 @@ impl<Marker> TypedKeyValue<Marker> {
             }),
         }
     }
+
+    pub fn key_container_ref(&self) -> &KB::Container {
+        self.key.as_container()
+    }
+
+    pub fn key_container_mut(&mut self) -> &mut KB::Container {
+        self.key.as_mut_container()
+    }
+
+    pub fn value_container_ref(&self) -> &VB::Container {
+        self.value.as_container()
+    }
+
+    pub fn value_container_mut(&mut self) -> &mut VB::Container {
+        self.value.as_mut_container()
+    }
+
+    pub fn into_key_container(self) -> Box<KB::Container> {
+        self.key.into_box_container()
+    }
+
+    pub fn into_value_container(self) -> Box<VB::Container> {
+        self.value.into_box_container()
+    }
+
+    pub fn into_container_pair(self) -> (Box<KB::Container>, Box<VB::Container>) {
+        (
+            self.key.into_box_container(),
+            self.value.into_box_container(),
+        )
+    }
 }
 
-impl<M> Debug for TypedKeyValue<M> {
+impl<M, KB: 'static + Bounds, VB: 'static + Bounds> Debug for TypedKeyValue<M, KB, VB> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("TypedKeyValue")
     }
 }
 
 /// Represents borrowed pair of key and value.
-pub struct TypedKeyValueRef<'a, Marker> {
-    key: &'a TypedKey,
-    value: &'a TypedMapValue,
+pub struct TypedKeyValueRef<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds> {
+    key: &'a TypedKey<KB>,
+    value: &'a TypedMapValue<VB>,
     _marker: PhantomData<Marker>,
 }
 
 // TODO: Consider whether should use _ref suffix in those methods
-impl<'a, Marker> TypedKeyValueRef<'a, Marker> {
+impl<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds> TypedKeyValueRef<'a, Marker, KB, VB> {
     /// Downcast key to reference of `K`. Returns `None` if not possible.
-    pub fn downcast_key_ref<K: 'static + TypedMapKey<Marker>>(&self) -> Option<&'a K> {
+    pub fn downcast_key_ref<K: 'static + TypedMapKey<Marker>>(&self) -> Option<&'a K>
+    where
+        KB: HasBounds<K>,
+    {
         self.key.downcast_ref()
     }
 
     /// Downcast value and returns reference or `None` if downcast failed.
-    pub fn downcast_value_ref<V: 'static + Any>(&self) -> Option<&'a V> {
+    pub fn downcast_value_ref<V: 'static>(&self) -> Option<&'a V>
+    where
+        VB: HasBounds<V>,
+    {
         self.value.downcast_ref()
     }
 
     /// Downcast key to reference of `K` and value to reference of `K::Value`.
     /// Returns `None` if not possible.
-    pub fn downcast_pair_ref<K: 'static + TypedMapKey<Marker>>(
-        &self,
-    ) -> Option<(&'a K, &'a K::Value)> {
+    pub fn downcast_pair_ref<K>(&self) -> Option<(&'a K, &'a K::Value)>
+    where
+        K: 'static + TypedMapKey<Marker>,
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+    {
         self.downcast_key_ref()
             .and_then(move |key| self.downcast_value_ref().map(move |value| (key, value)))
     }
+
+    pub fn key_container_ref(&self) -> &KB::Container {
+        self.key.as_container()
+    }
+
+    pub fn value_container_ref(&self) -> &VB::Container {
+        self.value.as_container()
+    }
 }
 
-impl<M> Debug for TypedKeyValueRef<'_, M> {
+impl<M, KB: 'static + Bounds, VB: 'static + Bounds> Debug for TypedKeyValueRef<'_, M, KB, VB> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("TypedKeyValueRef")
     }
 }
 
 /// Represents mutably borrowed pair of key and value.
-pub struct TypedKeyValueMutRef<'a, Marker> {
-    key: &'a TypedKey,
-    value: &'a mut TypedMapValue,
+pub struct TypedKeyValueMutRef<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds> {
+    key: &'a TypedKey<KB>,
+    value: &'a mut TypedMapValue<VB>,
     _marker: PhantomData<Marker>,
 }
 
-impl<'a, Marker> TypedKeyValueMutRef<'a, Marker> {
+impl<'a, Marker, KB, VB> TypedKeyValueMutRef<'a, Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
     /// Downcast key to reference of `K`. Returns `None` if not possible.
-    pub fn downcast_key_ref<K: 'static + TypedMapKey<Marker>>(&self) -> Option<&'a K> {
+    pub fn downcast_key_ref<K>(&self) -> Option<&'a K>
+    where
+        KB: HasBounds<K>,
+        K: 'static + TypedMapKey<Marker>,
+    {
         self.key.downcast_ref()
     }
 
@@ -1261,9 +1495,11 @@ impl<'a, Marker> TypedKeyValueMutRef<'a, Marker> {
     /// Note: this function borrows mutably self, and returns mutable reference with lifetime
     /// bounded by that borrow. If you need to obtain mutable reference with hashmap bounded
     /// lifetime ('a), then use `downcast_value` function.
-    pub fn downcast_value_mut<'b, V: 'static + Any>(&'b mut self) -> Option<&'b mut V>
+    pub fn downcast_value_mut<'b, V>(&'b mut self) -> Option<&'b mut V>
     where
         'a: 'b,
+        V: 'static,
+        VB: HasBounds<V>,
     {
         self.value.downcast_mut()
     }
@@ -1300,7 +1536,11 @@ impl<'a, Marker> TypedKeyValueMutRef<'a, Marker> {
     /// assert_eq!(*v[0], 3);
     /// assert_eq!(v.len(), 1);
     /// ```
-    pub fn downcast_value<V: 'static + Any>(self) -> Result<&'a mut V, Self> {
+    pub fn downcast_value<V>(self) -> Result<&'a mut V, Self>
+    where
+        V: 'static,
+        VB: HasBounds<V>,
+    {
         if self.value.is::<V>() {
             Ok(self.value.downcast_mut().expect("Unreachable!"))
         } else {
@@ -1313,11 +1553,12 @@ impl<'a, Marker> TypedKeyValueMutRef<'a, Marker> {
     /// Note: this function borrows mutably self, and returns mutable reference with lifetime
     /// bounded by that borrow. If you need to obtain mutable reference with hashmap bounded
     /// lifetime ('a), then use `downcast_pair` function.
-    pub fn downcast_pair_mut<'b, K: 'static + TypedMapKey<Marker>>(
-        &'b mut self,
-    ) -> Option<(&'b K, &'b mut K::Value)>
+    pub fn downcast_pair_mut<'b, K>(&'b mut self) -> Option<(&'b K, &'b mut K::Value)>
     where
         'a: 'b,
+        K: 'static + TypedMapKey<Marker>,
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
     {
         self.downcast_key_ref()
             .and_then(move |key| self.downcast_value_mut().map(move |value| (key, value)))
@@ -1357,9 +1598,12 @@ impl<'a, Marker> TypedKeyValueMutRef<'a, Marker> {
     /// assert_eq!(*v[0].1, 3);
     /// assert_eq!(v.len(), 1);
     /// ```
-    pub fn downcast_pair<K: 'static + TypedMapKey<Marker>>(
-        self,
-    ) -> Result<(&'a K, &'a mut K::Value), Self> {
+    pub fn downcast_pair<K>(self) -> Result<(&'a K, &'a mut K::Value), Self>
+    where
+        K: 'static + TypedMapKey<Marker>,
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+    {
         let key = self.downcast_key_ref();
 
         let key = match key {
@@ -1372,9 +1616,21 @@ impl<'a, Marker> TypedKeyValueMutRef<'a, Marker> {
             Err(err) => Err(err),
         }
     }
+
+    pub fn key_container_ref(&self) -> &KB::Container {
+        self.key.as_container()
+    }
+
+    pub fn value_container_ref(&self) -> &VB::Container {
+        self.value.as_container()
+    }
+
+    pub fn value_container_mut(&mut self) -> &mut VB::Container {
+        self.value.as_mut_container()
+    }
 }
 
-impl<M> Debug for TypedKeyValueMutRef<'_, M> {
+impl<M, KB: 'static + Bounds, VB: 'static + Bounds> Debug for TypedKeyValueMutRef<'_, M, KB, VB> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("TypedMutRef")
     }
@@ -1382,9 +1638,10 @@ impl<M> Debug for TypedKeyValueMutRef<'_, M> {
 
 #[cfg(test)]
 mod tests {
+    use std::hash::Hash;
+
     use crate::TypedMap;
     use crate::TypedMapKey;
-    use std::hash::Hash;
 
     #[test]
     fn test_basic_use() {
@@ -1474,7 +1731,7 @@ mod tests {
 
     #[test]
     fn test_always_equal_types() {
-        let mut state = TypedMap::default();
+        let mut state = TypedMap::new();
         #[derive(Debug, Clone, Hash, PartialEq, Eq)]
         struct AThing;
         #[derive(Debug, Clone, Hash, PartialEq, Eq)]

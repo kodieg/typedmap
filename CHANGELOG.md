@@ -17,3 +17,7 @@
 # 0.3.1 (March 12, 2023)
 
 - Fixes bug with downcasting value ref in TypedKeyValue ([PR 8](https://github.com/kodieg/typedmap/pull/8))
+
+# 0.4.0 (To be released yet)
+
+- Add option to specify bounds for both keys and values (e.g. Clone bound)
