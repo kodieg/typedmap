@@ -13,3 +13,7 @@
 # 0.3.0 (June 15, 2022)
 
 - Update version of dash map to 5.3.4
+
+# 0.3.1 (March 12, 2023)
+
+- Fixes bug with downcasting value ref in TypedKeyValue ([PR 8](https://github.com/kodieg/typedmap/pull/8))
