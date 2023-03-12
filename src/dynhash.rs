@@ -47,7 +47,7 @@ pub(crate) trait DowncastDynHash: Sized {
 
 impl DowncastDynHash for Box<dyn DynHash> {
     fn downcast<T: Any>(self) -> Result<Box<T>, Self> {
-        if (&*self).as_any().is::<T>() {
+        if (*self).as_any().is::<T>() {
             let downcasted = self.as_any_box().downcast().expect("Broken Any downcast");
             Ok(downcasted)
         } else {
@@ -58,7 +58,7 @@ impl DowncastDynHash for Box<dyn DynHash> {
 
 impl DowncastDynHash for Box<dyn DynHash + 'static + Send + Sync> {
     fn downcast<T: Any>(self) -> Result<Box<T>, Self> {
-        if (&*self).as_any().is::<T>() {
+        if (*self).as_any().is::<T>() {
             let downcasted = self
                 .as_any_box()
                 .downcast()

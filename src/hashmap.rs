@@ -1151,7 +1151,7 @@ impl<Marker> TypedKeyValue<Marker> {
 
     /// Downcast key to reference of `V`. Returns `None` if not possible.
     pub fn downcast_value_ref<V: Any>(&self) -> Option<&V> {
-        self.key.downcast_ref()
+        self.value.downcast_ref()
     }
 
     /// Downcast key to the owned value of type `V`. Returns Err(Self) if not possible.
