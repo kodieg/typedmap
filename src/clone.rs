@@ -5,12 +5,13 @@ use std::hash::Hash;
 use dyn_clone::DynClone;
 
 use crate::bounds::{Bounds, ContainerWithHash, HasBounds};
+use crate::impl_custom_bounds;
 
 /// Basically dyn trait object for cloneable types
 pub trait CloneAny: DynClone + Any {
     fn as_any(&self) -> &dyn Any;
     fn as_mut_any(&mut self) -> &mut dyn Any;
-    fn as_box_any(self: Box<Self>) -> Box<dyn Any>;
+    fn as_any_box(self: Box<Self>) -> Box<dyn Any>;
 }
 
 dyn_clone::clone_trait_object!(CloneAny);
@@ -24,7 +25,7 @@ impl<T: Clone + Any> CloneAny for T {
         self
     }
 
-    fn as_box_any(self: Box<Self>) -> Box<dyn Any> {
+    fn as_any_box(self: Box<Self>) -> Box<dyn Any> {
         self
     }
 }
@@ -61,92 +62,18 @@ pub fn clone_box<T: ?Sized + CloneAny>(t: &T) -> Box<T> {
 ///
 /// for elem in map.iter() {
 ///     let cloned = clone_box(elem.key_container_ref());
-///     let key = *cloned.as_box_any().downcast::<CloneKey>().unwrap();
+///     let key = *cloned.as_any_box().downcast::<CloneKey>().unwrap();
 ///     assert_eq!(key, CloneKey);
 ///
 ///     let cloned = clone_box(elem.value_container_ref());
-///     let value = *cloned.as_box_any().downcast::<u32>().unwrap();
+///     let value = *cloned.as_any_box().downcast::<u32>().unwrap();
 ///     assert_eq!(value, 32);
 /// }
 /// ```
 ///
 pub struct CloneBounds;
 
-impl Bounds for CloneBounds {
-    type KeyContainer = dyn ContainerWithHash<CloneBounds>;
-    type Container = dyn CloneAny;
-
-    fn as_any(this: &Self::Container) -> &dyn Any {
-        this.as_any()
-    }
-
-    fn as_any_mut(this: &mut Self::Container) -> &mut dyn Any {
-        this.as_mut_any()
-    }
-
-    fn as_any_box(this: Box<Self::Container>) -> Box<dyn Any> {
-        this.as_box_any()
-    }
-}
-
-impl<T: CloneAny> HasBounds<T> for CloneBounds {
-    fn cast_box(this: Box<T>) -> Box<Self::Container> {
-        this
-    }
-
-    fn as_ref(this: &T) -> &Self::Container {
-        this
-    }
-
-    fn as_mut(this: &mut T) -> &mut Self::Container {
-        this
-    }
-
-    fn cast_key_box(this: Box<T>) -> Box<Self::KeyContainer>
-    where
-        T: 'static + Sized + Hash + Eq,
-    {
-        this
-    }
-}
-
 /// Bounds for Cloneable keys or values which are Send & Sync
 pub struct SyncCloneBounds;
-
-impl Bounds for SyncCloneBounds {
-    type KeyContainer = dyn ContainerWithHash<SyncCloneBounds> + Send + Sync;
-    type Container = dyn CloneAny + Send + Sync;
-
-    fn as_any(this: &Self::Container) -> &dyn Any {
-        this.as_any()
-    }
-
-    fn as_any_mut(this: &mut Self::Container) -> &mut dyn Any {
-        this.as_mut_any()
-    }
-
-    fn as_any_box(this: Box<Self::Container>) -> Box<dyn Any> {
-        this.as_box_any()
-    }
-}
-
-impl<T: CloneAny + Send + Sync> HasBounds<T> for SyncCloneBounds {
-    fn cast_box(this: Box<T>) -> Box<Self::Container> {
-        this
-    }
-
-    fn as_ref(this: &T) -> &Self::Container {
-        this
-    }
-
-    fn as_mut(this: &mut T) -> &mut Self::Container {
-        this
-    }
-
-    fn cast_key_box(this: Box<T>) -> Box<Self::KeyContainer>
-    where
-        T: 'static + Sized + Hash + Eq,
-    {
-        this
-    }
-}
+impl_custom_bounds!(CloneBounds, CloneAny, CloneAny);
+impl_custom_bounds!(SyncCloneBounds, CloneAny, CloneAny, + Send + Sync);
