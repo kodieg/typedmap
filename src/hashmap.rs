@@ -1,3 +1,4 @@
+//! Provides [`TypedMap`] type.
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash};
 use std::iter::FusedIterator;
@@ -1721,12 +1722,12 @@ mod tests {
             }
         });
 
-        let b_things: Vec<_> = state
+        let b_things = state
             .iter_mut()
             .flat_map(|r| r.downcast_pair::<BThing>())
-            .collect();
+            .count();
 
-        assert_eq!(b_things.len(), 3);
+        assert_eq!(b_things, 3);
     }
 
     #[test]

@@ -1,3 +1,4 @@
+//! Entry for TypedMap
 use std::marker::PhantomData;
 
 use crate::bounds::{Bounds, HasBounds};

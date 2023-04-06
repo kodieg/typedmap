@@ -1,3 +1,4 @@
+//! Entry type for TypedDashMap
 use std::{hash::BuildHasher, marker::PhantomData};
 
 use crate::bounds::{Bounds, HasBounds};
