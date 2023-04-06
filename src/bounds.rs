@@ -429,7 +429,7 @@ impl<T: 'static + Send + Sync> HasBounds<T> for SyncAnyBounds {
 #[macro_export]
 macro_rules! impl_dyn_trait_wrapper {
     ($dyn:ident, $trait_name:ident) => {
-        impl_dyn_trait_wrapper!($dyn, $trait_name, );
+        $crate::impl_dyn_trait_wrapper!($dyn, $trait_name, );
     };
     ($dyn:ident, $trait_name:ident, $(+ $marker_traits:ident)*) => {
         trait $dyn: ::std::any::Any $(+ $marker_traits)*{
@@ -573,7 +573,7 @@ macro_rules! impl_dyn_trait_wrapper {
 #[macro_export]
 macro_rules! impl_custom_bounds {
     ($bounds:ident, $dyn:ident, $trait_name:ident) => {
-        impl_custom_bounds!($bounds, $dyn, $trait_name, );
+        $crate::impl_custom_bounds!($bounds, $dyn, $trait_name, );
     };
     ($bounds:ident, $dyn:ident, $trait_name:ident, $(+ $marker_traits:ident)*) => {
         impl $crate::bounds::Bounds for $bounds {
