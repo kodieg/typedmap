@@ -349,32 +349,251 @@ impl<T: 'static + Send + Sync> HasBounds<T> for SyncAnyBounds {
     }
 }
 
-/// Implements Bounds & HasBounds trait for `$bounds` using `$dyn` trait object and wrapping `$trait_name`.
+/// Implements DynTrait `$dyn` wrapper for specified trait `$trait_name`.
+///
+/// DynTrait exposes reference to dyn `$trait_name` using `as_object` method. It also exposes necessary
+/// conversions to [`std::any::Any`] trait.
+///
+/// For example, you can define DynComponent trait that will inherit from both Component and Any:
+/// ```rust
+/// use typedmap::impl_dyn_trait_wrapper;
+/// trait Component {}
+/// impl_dyn_trait_wrapper!(DynComponent, Component);
+/// ```
+/// which expands to
+/// ```rust
+/// # trait Component {}
+/// trait DynComponent: ::std::any::Any {
+///     fn as_object(&self) -> &(dyn Component);
+///
+///     fn as_any(&self) -> &dyn ::std::any::Any;
+///     fn as_mut_any(&mut self) -> &mut dyn ::std::any::Any;
+///     fn as_any_box(self: Box<Self>) -> Box<dyn ::std::any::Any>;
+/// }
+/// impl<T: Component + ::std::any::Any> DynComponent for T {
+///     fn as_object(&self) -> &(dyn Component) {
+///         self
+///     }
+///
+///     fn as_any(&self) -> &dyn ::std::any::Any {
+///         self
+///     }
+///
+///     fn as_mut_any(&mut self) -> &mut dyn ::std::any::Any {
+///         self
+///     }
+///
+///     fn as_any_box(self: Box<Self>) -> Box<dyn ::std::any::Any> {
+///         self
+///     }
+/// }
+/// ```
+///
+///
+/// Optionally you can specify additionally marker traits, e.g. Send+Sync, for example:
+/// ```rust
+/// use typedmap::impl_dyn_trait_wrapper;
+/// trait Component {}
+/// impl_dyn_trait_wrapper!(DynComponent, Component, +Send+Sync);
+/// ```
+/// which expands to
+/// ```rust
+/// # trait Component {}
+/// trait DynComponent: ::std::any::Any + Send + Sync {
+///     fn as_object(&self) -> &(dyn Component + Send + Sync);
+///
+///     fn as_any(&self) -> &dyn ::std::any::Any;
+///     fn as_mut_any(&mut self) -> &mut dyn ::std::any::Any;
+///     fn as_any_box(self: Box<Self>) -> Box<dyn ::std::any::Any>;
+/// }
+/// impl<T: Component + ::std::any::Any + Send + Sync> DynComponent for T {
+///     fn as_object(&self) -> &(dyn Component + Send + Sync) {
+///         self
+///     }
+///
+///     fn as_any(&self) -> &dyn ::std::any::Any {
+///         self
+///     }
+///
+///     fn as_mut_any(&mut self) -> &mut dyn ::std::any::Any {
+///         self
+///     }
+///
+///     fn as_any_box(self: Box<Self>) -> Box<dyn ::std::any::Any> {
+///         self
+///     }
+/// }
+/// ```
+/// This DynTrait wrapper can be used as a [`Bounds::Container`] in [`Bounds`] implementation.
+///
+#[macro_export]
+macro_rules! impl_dyn_trait_wrapper {
+    ($dyn:ident, $trait_name:ident) => {
+        impl_dyn_trait_wrapper!($dyn, $trait_name, );
+    };
+    ($dyn:ident, $trait_name:ident, $(+ $marker_traits:ident)*) => {
+        trait $dyn: ::std::any::Any $(+ $marker_traits)*{
+            fn as_object(&self) -> &(dyn $trait_name $(+ $marker_traits)*);
+
+            fn as_any(&self) -> &dyn ::std::any::Any;
+            fn as_mut_any(&mut self) -> &mut dyn ::std::any::Any;
+            fn as_any_box(self: Box<Self>) -> Box<dyn ::std::any::Any>;
+        }
+
+        impl<T: $trait_name + ::std::any::Any $(+ $marker_traits)*> $dyn for T {
+            fn as_object(&self) -> &(dyn $trait_name $(+ $marker_traits)*) {
+                self
+            }
+
+            fn as_any(&self) -> &dyn ::std::any::Any {
+                self
+            }
+
+            fn as_mut_any(&mut self) -> &mut dyn ::std::any::Any {
+                self
+            }
+
+            fn as_any_box(self: Box<Self>) -> Box<dyn ::std::any::Any> {
+                self
+            }
+        }
+    }
+}
+
+/// Implements [`Bounds`] & [`HasBounds`] traits for `$bounds` using `$dyn` trait object and wrapping `$trait_name`.
 /// Together with [`crate::impl_dyn_trait_wrapper`] macro, it serves as simple way to implement custom [`Bounds`].
+///
+/// For example you may define requirement for custom trait `Component`. Firstly, you need to define trait object
+/// that will be both `Any` and `Component`. Easiest way to do it is to use [`impl_dyn_trait_wrapper`].
+/// Then you need to define bounds struct and use `impl_custom_bounds` macro.
+/// ```rust
+/// use std::any::Any;
+/// use typedmap::{impl_custom_bounds, impl_dyn_trait_wrapper};
+///
+/// // Trait that you require
+/// trait Component {}
+/// // Requirement bounds used in TypedMap or TypedDashMap
+/// struct CustomBounds;
+/// impl_dyn_trait_wrapper!(DynComponent, Component);
+/// impl_custom_bounds!(CustomBounds, DynComponent, Component);
+/// ```
+/// `impl_custom_bounds` expands to:
+/// ```rust
+/// # use std::any::Any;
+/// # use typedmap::{impl_custom_bounds, impl_dyn_trait_wrapper};
+/// # trait Component {}
+/// # impl_dyn_trait_wrapper!(DynComponent, Component);
+/// # struct CustomBounds;
+/// impl ::typedmap::bounds::Bounds for CustomBounds {
+///     type KeyContainer = dyn ::typedmap::bounds::ContainerWithHash<CustomBounds>;
+///     type Container = dyn DynComponent;
+///
+///     fn as_any(this: &Self::Container) -> &dyn ::std::any::Any {
+///         this.as_any()
+///     }
+///
+///     fn as_any_mut(this: &mut Self::Container) -> &mut dyn ::std::any::Any {
+///         this.as_mut_any()
+///     }
+///
+///     fn as_any_box(this: Box<Self::Container>) -> Box<dyn ::std::any::Any> {
+///         this.as_any_box()
+///     }
+/// }
+/// impl<T: Component + ::std::any::Any> ::typedmap::bounds::HasBounds<T> for CustomBounds {
+///     fn cast_box(this: Box<T>) -> Box<Self::Container> {
+///         this
+///     }
+///
+///     fn as_ref(this: &T) -> &Self::Container {
+///         this
+///     }
+///
+///     fn as_mut(this: &mut T) -> &mut Self::Container {
+///         this
+///     }
+///
+///     fn cast_key_box(this: Box<T>) -> Box<Self::KeyContainer> where T: 'static + Sized + ::std::hash::Hash + ::std::cmp::Eq {
+///         this
+///     }
+/// }
+/// ```
+///
+/// You can also add marker traits as requrement, for example:
+/// ```rust
+/// # use std::any::Any;
+/// # use typedmap::{impl_custom_bounds, impl_dyn_trait_wrapper};
+/// # trait Component {}
+/// # struct CustomBounds;
+/// # impl_dyn_trait_wrapper!(DynComponent, Component);
+/// impl_custom_bounds!(CustomBounds, DynComponent, Component, +Send+Sync);
+/// ```
+/// which expands to:
+/// ```rust
+/// # use std::any::Any;
+/// # use typedmap::{impl_custom_bounds, impl_dyn_trait_wrapper};
+/// # trait Component {}
+/// # struct CustomBounds;
+/// # impl_dyn_trait_wrapper!(DynComponent, Component);
+/// impl ::typedmap::bounds::Bounds for CustomBounds {
+///     type KeyContainer = dyn ::typedmap::bounds::ContainerWithHash<CustomBounds> + Send + Sync;
+///     type Container = dyn DynComponent + Send + Sync;
+///
+///     fn as_any(this: &Self::Container) -> &dyn ::std::any::Any {
+///         this.as_any()
+///     }
+///
+///     fn as_any_mut(this: &mut Self::Container) -> &mut dyn ::std::any::Any {
+///         this.as_mut_any()
+///     }
+///
+///     fn as_any_box(this: Box<Self::Container>) -> Box<dyn ::std::any::Any> {
+///         this.as_any_box()
+///     }
+/// }
+/// impl<T: Component + ::std::any::Any + Send + Sync> ::typedmap::bounds::HasBounds<T> for CustomBounds {
+///     fn cast_box(this: Box<T>) -> Box<Self::Container> {
+///         this
+///     }
+///
+///     fn as_ref(this: &T) -> &Self::Container {
+///         this
+///     }
+///
+///     fn as_mut(this: &mut T) -> &mut Self::Container {
+///         this
+///     }
+///
+///     fn cast_key_box(this: Box<T>) -> Box<Self::KeyContainer> where T: 'static + Sized + ::std::hash::Hash + ::std::cmp::Eq {
+///         this
+///     }
+/// }
+/// ```
+///
 #[macro_export]
 macro_rules! impl_custom_bounds {
     ($bounds:ident, $dyn:ident, $trait_name:ident) => {
         impl_custom_bounds!($bounds, $dyn, $trait_name, );
     };
     ($bounds:ident, $dyn:ident, $trait_name:ident, $(+ $marker_traits:ident)*) => {
-        impl Bounds for $bounds {
-            type KeyContainer = dyn ContainerWithHash<$bounds> $(+ $marker_traits)*;
+        impl $crate::bounds::Bounds for $bounds {
+            type KeyContainer = dyn $crate::bounds::ContainerWithHash<$bounds> $(+ $marker_traits)*;
             type Container = dyn $dyn $(+ $marker_traits)*;
 
-            fn as_any(this: &Self::Container) -> &dyn Any {
+            fn as_any(this: &Self::Container) -> &dyn ::std::any::Any {
                 this.as_any()
             }
 
-            fn as_any_mut(this: &mut Self::Container) -> &mut dyn Any {
+            fn as_any_mut(this: &mut Self::Container) -> &mut dyn ::std::any::Any {
                 this.as_mut_any()
             }
 
-            fn as_any_box(this: Box<Self::Container>) -> Box<dyn Any> {
+            fn as_any_box(this: Box<Self::Container>) -> Box<dyn ::std::any::Any> {
                 this.as_any_box()
             }
         }
 
-        impl<T: $trait_name + Any $(+ $marker_traits)*> HasBounds<T> for $bounds {
+        impl<T: $trait_name + ::std::any::Any $(+ $marker_traits)*> $crate::bounds::HasBounds<T> for $bounds {
             fn cast_box(this: Box<T>) -> Box<Self::Container> {
                 this
             }
@@ -387,46 +606,10 @@ macro_rules! impl_custom_bounds {
                 this
             }
 
-            fn cast_key_box(this: Box<T>) -> Box<Self::KeyContainer> where T: 'static + Sized + Hash + Eq {
+            fn cast_key_box(this: Box<T>) -> Box<Self::KeyContainer> where T: 'static + Sized + ::std::hash::Hash + ::std::cmp::Eq {
                 this
             }
         }
 
-    }
-}
-
-/// Implements DynTrait wrapper for specified trait. Optionally you can specify additionally marker traits.
-/// This DynTrait wrapper can be used as a [`Bounds::Container`] in [`Bounds`] implementation.
-#[macro_export]
-macro_rules! impl_dyn_trait_wrapper {
-    ($dyn:ident, $trait_name:ident) => {
-        impl_dyn_trait_wrapper!($dyn, $trait_name, );
-    };
-    ($dyn:ident, $trait_name:ident, $(+ $marker_traits:ident)*) => {
-        trait $dyn: Any $(+ $marker_traits)*{
-            fn as_object(&self) -> &dyn $trait_name $(+ $marker_traits)*;
-
-            fn as_any(&self) -> &dyn Any;
-            fn as_mut_any(&mut self) -> &mut dyn Any;
-            fn as_any_box(self: Box<Self>) -> Box<dyn Any>;
-        }
-
-        impl<T: $trait_name + Any $(+ $marker_traits)*> $dyn for T {
-            fn as_object(&self) -> &dyn $trait_name $(+ $marker_traits)* {
-                self
-            }
-
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-
-            fn as_mut_any(&mut self) -> &mut dyn Any {
-                self
-            }
-
-            fn as_any_box(self: Box<Self>) -> Box<dyn Any> {
-                self
-            }
-        }
     }
 }

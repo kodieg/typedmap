@@ -1,10 +1,8 @@
 //! Provides struct for `Clone` bounds.
 use std::any::Any;
-use std::hash::Hash;
 
 use dyn_clone::DynClone;
 
-use crate::bounds::{Bounds, ContainerWithHash, HasBounds};
 use crate::impl_custom_bounds;
 
 /// Basically dyn trait object for cloneable types
