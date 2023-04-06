@@ -132,9 +132,9 @@ impl<Marker> TypedDashMap<Marker> {
 }
 
 impl<Marker, KB, VB> TypedDashMap<Marker, KB, VB>
-    where
-        KB: 'static + Bounds,
-        VB: 'static + Bounds,
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
 {
     pub fn new_with_bounds() -> Self {
         TypedDashMap {

@@ -101,13 +101,16 @@
 //!  * [`clone::SyncCloneBounds`] (if `clone` feature is enabled) - represents `Clone + Any + Send + Sync` bounds.
 //!
 //! These bounds can be specified in the type signature separately for keys and values, e.g.
-#![cfg_attr(feature = "clone", doc = r#"
+#![cfg_attr(
+    feature = "clone",
+    doc = r#"
 ```rust
 use typedmap::{TypedMap, TypedMapKey};
 use typedmap::clone::{CloneBounds};
 let mut map: TypedMap::<(), CloneBounds, CloneBounds, _> = TypedMap::new_with_bounds();
 ```
-"#)]
+"#
+)]
 //!
 //! It is possible to define own bounds using [`bounds::Bounds`] and [`bounds::HasBounds`] traits to add custom restrictions to values.
 //! For example, you may want to enforce that each value implements a custom `Component` trait.
