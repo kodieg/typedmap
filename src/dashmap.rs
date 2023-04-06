@@ -1,3 +1,4 @@
+//! Provides [`TypedDashMap`], a concurrent version of [`crate::TypedMap`]
 use std::collections::hash_map::RandomState;
 use std::hash::BuildHasher;
 use std::marker::PhantomData;
@@ -125,6 +126,19 @@ impl<Marker> TypedDashMap<Marker> {
     pub fn with_capacity(capacity: usize) -> Self {
         TypedDashMap {
             state: DashMap::with_capacity(capacity),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<Marker, KB, VB> TypedDashMap<Marker, KB, VB>
+    where
+        KB: 'static + Bounds,
+        VB: 'static + Bounds,
+{
+    pub fn new_with_bounds() -> Self {
+        TypedDashMap {
+            state: Default::default(),
             _phantom: PhantomData,
         }
     }
@@ -639,6 +653,14 @@ where
         let (key, value) = self.key_value.pair();
         Some((key.downcast_ref()?, value.downcast_ref()?))
     }
+
+    pub fn key_container_ref(&self) -> &KB::Container {
+        self.key_value.key().as_container()
+    }
+
+    pub fn value_container_ref(&self) -> &VB::Container {
+        self.key_value.value().as_container()
+    }
 }
 
 /// An immutable reference
@@ -822,6 +844,14 @@ impl<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds> TypedKeyValueRef<'a
     {
         self.downcast_key_ref()
             .and_then(move |key| self.downcast_value_ref().map(move |value| (key, value)))
+    }
+
+    pub fn key_container_ref(&self) -> &KB::Container {
+        self.key.as_container()
+    }
+
+    pub fn value_container_ref(&self) -> &VB::Container {
+        self.value.as_container()
     }
 }
 
