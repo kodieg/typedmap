@@ -1,4 +1,4 @@
-//! Provides [`TypedDashMap`], a concurrent version of [`crate::TypedMap`]
+//! Provides [`TypedDashMap`], a concurrent version of [TypedMap](crate::TypedMap)
 use std::collections::hash_map::RandomState;
 use std::hash::BuildHasher;
 use std::marker::PhantomData;

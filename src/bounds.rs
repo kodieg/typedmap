@@ -2,7 +2,7 @@
 //!
 //! Struct that implement [`Bounds`] trait may be used as a restriction on types for keys or values
 //! stored in the hashmap. Imagine that you'd like to store only values that implement some trait, e.g.
-//! service. One can implement new bounds using convinience macros [`crate::impl_custom_bounds`] and [`crate::impl_dyn_trait_wrapper`]:
+//! service. One can implement new bounds using convenience macros [impl_custom_bounds](crate::impl_custom_bounds) and [impl_dyn_trait_wrapper](crate::impl_dyn_trait_wrapper):
 //! ```rust
 //! use std::any::Any;
 //! use std::hash::Hash;
@@ -352,7 +352,7 @@ impl<T: 'static + Send + Sync> HasBounds<T> for SyncAnyBounds {
 /// Implements DynTrait `$dyn` wrapper for specified trait `$trait_name`.
 ///
 /// DynTrait exposes reference to dyn `$trait_name` using `as_object` method. It also exposes necessary
-/// conversions to [`std::any::Any`] trait.
+/// conversions to [Any](std::any::Any) trait.
 ///
 /// For example, you can define DynComponent trait that will inherit from both Component and Any:
 /// ```rust
@@ -461,7 +461,7 @@ macro_rules! impl_dyn_trait_wrapper {
 }
 
 /// Implements [`Bounds`] & [`HasBounds`] traits for `$bounds` using `$dyn` trait object and wrapping `$trait_name`.
-/// Together with [`crate::impl_dyn_trait_wrapper`] macro, it serves as simple way to implement custom [`Bounds`].
+/// Together with [impl_dyn_trait_wrapper](crate::impl_dyn_trait_wrapper) macro, it serves as simple way to implement custom [`Bounds`].
 ///
 /// For example you may define requirement for custom trait `Component`. Firstly, you need to define trait object
 /// that will be both `Any` and `Component`. Easiest way to do it is to use [`impl_dyn_trait_wrapper`].
