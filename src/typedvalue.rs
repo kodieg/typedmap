@@ -26,7 +26,6 @@ impl<B: 'static + Bounds> TypedMapValue<B> {
         B: HasBounds<V>,
     {
         if self.is::<V>() {
-            // or Box<K>?
             Ok(*B::downcast_box(self.0).unwrap_or_else(|_| panic!("downcast failed")))
         } else {
             Err(self)

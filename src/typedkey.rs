@@ -38,7 +38,6 @@ impl<B: 'static + Bounds> TypedKey<B> {
         B: HasBounds<K>,
     {
         if self.is::<K>() {
-            // or Box<K>?
             Ok(*B::downcast_box(self.0.into_box_container())
                 .unwrap_or_else(|_| panic!("downcast failed")))
         } else {
