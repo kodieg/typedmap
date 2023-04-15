@@ -491,6 +491,47 @@ where
         Iter(self.state.iter(), PhantomData)
     }
 
+    /// An iterator visiting all key-value pairs in arbitrary order yielding mutable references.
+    ///
+    /// # Examples
+    /// ```
+    /// use typedmap::TypedDashMap;
+    /// use typedmap::TypedMapKey;
+    ///
+    /// #[derive(Hash, PartialEq, Eq, Debug)]
+    /// struct Key(usize);
+    /// #[derive(Hash, PartialEq, Eq, Debug)]
+    /// struct SKey(&'static str);
+    ///
+    /// impl TypedMapKey for Key {
+    ///     type Value = u32;
+    /// }
+    ///
+    /// impl TypedMapKey for SKey {
+    ///     type Value = usize;
+    /// }
+    ///
+    /// let mut map: TypedDashMap = TypedDashMap::new();
+    /// map.insert(Key(3), 3);
+    /// map.insert(SKey("four"), 4);
+    ///
+    /// for mut key_value in map.iter_mut() {
+    ///     if let Some((key, value)) = key_value.downcast_pair_mut::<Key>() {
+    ///         assert_eq!(key, &Key(3));
+    ///         assert_eq!(value, &3u32);
+    ///         *value = 4u32;
+    ///     }
+    ///
+    ///     if let Some((key, value)) = key_value.downcast_pair_mut::<SKey>() {
+    ///         assert_eq!(key, &SKey("four"));
+    ///         assert_eq!(value, &4);
+    ///     }
+    /// }
+    /// ```
+    pub fn iter_mut(&self) -> IterMut<'_, Marker, KB, VB, S> {
+        IterMut(self.state.iter_mut(), PhantomData)
+    }
+
     /// Gets the given key's corresponding entry in the map for in-place manipulation.
     ///
     /// # Examples
@@ -660,6 +701,122 @@ where
 
     pub fn value_container_ref(&self) -> &VB::Container {
         self.key_value.value().as_container()
+    }
+}
+
+/// An iterator over the entries of a TypedDashMap yielding mutable references
+///
+/// This `struct` is created by ['iter_mut'] method on [`TypedDashMap`]. See its documentation for more.
+///
+/// ['iter']: crate::TypedMap::iter
+///
+/// # Example
+/// ```
+/// use typedmap::TypedDashMap;
+/// use typedmap::TypedMapKey;
+///
+/// #[derive(Hash, PartialEq, Eq, Debug)]
+/// struct Key(usize);
+///
+/// impl TypedMapKey for Key {
+///     type Value = u32;
+/// }
+///
+/// let mut map: TypedDashMap = TypedDashMap::new();
+/// map.insert(Key(3), 3);
+/// let iter = map.iter_mut();
+///
+pub struct IterMut<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds, S>(
+    dashmap::iter::IterMut<'a, TypedKey<KB>, TypedMapValue<VB>, S>,
+    PhantomData<Marker>,
+);
+
+impl<'a, Marker, KB, VB, S> Iterator for IterMut<'a, Marker, KB, VB, S>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+    S: BuildHasher + Clone,
+{
+    type Item = TypedKeyValueMutGuard<'a, Marker, KB, VB, S>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let key_value = self.0.next()?;
+        Some(TypedKeyValueMutGuard {
+            key_value,
+            _marker: PhantomData,
+        })
+    }
+}
+
+pub struct TypedKeyValueMutGuard<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds, S> {
+    key_value: dashmap::mapref::multiple::RefMutMulti<'a, TypedKey<KB>, TypedMapValue<VB>, S>,
+    _marker: PhantomData<Marker>,
+}
+
+impl<'a, Marker, KB, VB, S> TypedKeyValueMutGuard<'a, Marker, KB, VB, S>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+    S: BuildHasher,
+{
+    /// Downcast key to reference of `K`. Returns `None` if not possible.
+    pub fn downcast_key_ref<K: 'static + TypedMapKey<Marker>>(&self) -> Option<&'_ K>
+    where
+        KB: HasBounds<K>,
+    {
+        self.key_value.key().downcast_ref()
+    }
+
+    /// Downcast value and returns reference or `None` if downcast failed.
+    pub fn downcast_value_ref<V: 'static>(&self) -> Option<&'_ V>
+    where
+        VB: HasBounds<V>,
+    {
+        self.key_value.value().downcast_ref()
+    }
+
+    /// Downcast value and returns reference or `None` if downcast failed.
+    pub fn downcast_value_mut<V: 'static>(&mut self) -> Option<&'_ mut V>
+    where
+        VB: HasBounds<V>,
+    {
+        self.key_value.value_mut().downcast_mut()
+    }
+
+    /// Downcast key to reference of `K` and value to reference of `K::Value`.
+    /// Returns `None` if not possible.
+    pub fn downcast_pair_ref<K>(&self) -> Option<(&'_ K, &'_ K::Value)>
+    where
+        K: 'static + TypedMapKey<Marker>,
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+    {
+        let (key, value) = self.key_value.pair();
+        Some((key.downcast_ref()?, value.downcast_ref()?))
+    }
+
+    /// Downcast key to reference of `K` and value to reference of `K::Value`.
+    /// Returns `None` if not possible.
+    pub fn downcast_pair_mut<K>(&mut self) -> Option<(&'_ K, &'_ mut K::Value)>
+    where
+        K: 'static + TypedMapKey<Marker>,
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+    {
+        let (key, value) = self.key_value.pair_mut();
+        Some((key.downcast_ref()?, value.downcast_mut()?))
+    }
+
+    pub fn key_container_ref(&self) -> &KB::Container {
+        self.key_value.key().as_container()
+    }
+
+    pub fn value_container_ref(&self) -> &VB::Container {
+        self.key_value.value().as_container()
+    }
+
+    pub fn value_container_mut(&mut self) -> &mut VB::Container {
+        self.key_value.value_mut().as_mut_container()
     }
 }
 
