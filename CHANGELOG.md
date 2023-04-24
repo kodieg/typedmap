@@ -20,4 +20,7 @@
 
 # 0.4.0 (To be released yet)
 
-- Add option to specify bounds for both keys and values (e.g. Clone bound)
+- BREAKING: TypedMap and TypedDashMap take two additional generic types: key bounds & value bounds, that allow to specify additional type constraints onto keys & values (e.g. CloneBounds).
+Use AnyBounds or SyncAnyBounds when migrating from 0.3.x version. 
+- Added iter_mut function for TypedDashMap
+- Added macros to easily implement custom bounds struct for your own traits (see bounds module docs)
