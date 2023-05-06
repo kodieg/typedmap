@@ -18,9 +18,10 @@
 
 - Fixes bug with downcasting value ref in TypedKeyValue ([PR 8](https://github.com/kodieg/typedmap/pull/8))
 
-# 0.4.0 (To be released yet)
+# 0.4.0 (May 6, 2023)
 
+- Changes in ([PR 9](https://github.com/kodieg/typedmap/pull/9))
 - BREAKING: TypedMap and TypedDashMap take two additional generic types: key bounds & value bounds, that allow to specify additional type constraints onto keys & values (e.g. CloneBounds).
 Use AnyBounds or SyncAnyBounds when migrating from 0.3.x version. 
-- Added iter_mut function for TypedDashMap
+- Added `iter_mut` function for TypedDashMap
 - Added macros to easily implement custom bounds struct for your own traits (see bounds module docs)
