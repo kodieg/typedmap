@@ -116,8 +116,8 @@ let mut map: TypedMap::<(), CloneBounds, CloneBounds, _> = TypedMap::new_with_bo
 //! For example, you may want to enforce that each value implements a custom `Component` trait.
 //! This can be done with a few lines of code using [impl_custom_bounds](crate::impl_custom_bounds) and [impl_dyn_trait_wrapper](crate::impl_dyn_trait_wrapper) macros.
 #![cfg_attr(
-feature = "dashmap",
-doc = r#"
+    feature = "dashmap",
+    doc = r#"
 ```rust
 // Your custom marker (could use also () as well)
 use typedmap::{impl_custom_bounds, impl_dyn_trait_wrapper,
