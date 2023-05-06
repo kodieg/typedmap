@@ -1,46 +1,48 @@
+//! Entry for TypedMap
 use std::marker::PhantomData;
 
+use crate::bounds::{Bounds, HasBounds};
 use crate::typedkey::TypedKey;
 use crate::typedvalue::TypedMapValue;
 use crate::TypedMapKey;
 
-pub struct OccupiedEntry<'a, K, Marker>
+const INVALID_ENTRY: &str = "Broken TypedMap: invalid entry";
+
+pub struct OccupiedEntry<'a, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
 {
-    base: std::collections::hash_map::OccupiedEntry<'a, TypedKey, TypedMapValue>,
-    _phantom: std::marker::PhantomData<Marker>,
-    _phantom_key: std::marker::PhantomData<K>,
+    base: std::collections::hash_map::OccupiedEntry<'a, TypedKey<KB>, TypedMapValue<VB>>,
+    _phantom: PhantomData<Marker>,
+    _phantom_key: PhantomData<K>,
 }
 
-impl<'a, K, Marker> OccupiedEntry<'a, K, Marker>
+impl<'a, K, KB, VB, Marker> OccupiedEntry<'a, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
 {
     #[inline]
     pub fn into_mut(self) -> &'a mut K::Value {
         self.base
             .into_mut()
             .downcast_mut::<K::Value>()
-            .expect("Broken TypedMap entry")
+            .expect(INVALID_ENTRY)
     }
 
     #[inline]
     pub fn key(&self) -> &K {
-        self.base
-            .key()
-            .downcast_ref::<K>()
-            .expect("Broken TypedMap entry")
+        self.base.key().downcast_ref::<K>().expect(INVALID_ENTRY)
     }
 
     #[inline]
     pub fn remove_entry(self) -> (K, K::Value) {
         let (k, v) = self.base.remove_entry();
-        let v = v
-            .downcast::<K::Value>()
-            .ok()
-            .expect("Broken TypedMap entry");
-        let k = k.downcast::<K>().ok().expect("Broken TypedMap entry");
+        let v = v.downcast::<K::Value>().expect(INVALID_ENTRY);
+        let k = k.downcast::<K>().expect(INVALID_ENTRY);
         (k, v)
     }
 
@@ -49,7 +51,7 @@ where
         self.base
             .get()
             .downcast_ref::<K::Value>()
-            .expect("Broken TypedMap entry")
+            .expect(INVALID_ENTRY)
     }
 
     #[inline]
@@ -57,7 +59,7 @@ where
         self.base
             .get_mut()
             .downcast_mut::<K::Value>()
-            .expect("Broken TypedMap entry")
+            .expect(INVALID_ENTRY)
     }
 
     #[inline]
@@ -66,8 +68,7 @@ where
         self.base
             .insert(value)
             .downcast::<K::Value>()
-            .ok()
-            .expect("Broken TypedMap entry")
+            .expect(INVALID_ENTRY)
     }
 
     #[inline]
@@ -75,39 +76,35 @@ where
         self.base
             .remove()
             .downcast::<K::Value>()
-            .ok()
-            .expect("Broken TypedMap entry")
+            .expect(INVALID_ENTRY)
     }
 }
 
-pub struct VacantEntry<'a, K, Marker>
+pub struct VacantEntry<'a, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
 {
-    base: std::collections::hash_map::VacantEntry<'a, TypedKey, TypedMapValue>,
+    base: std::collections::hash_map::VacantEntry<'a, TypedKey<KB>, TypedMapValue<VB>>,
     _phantom: std::marker::PhantomData<Marker>,
     _phantom_key: std::marker::PhantomData<K>,
 }
 
-impl<'a, K, Marker> VacantEntry<'a, K, Marker>
+impl<'a, K, KB, VB, Marker> VacantEntry<'a, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
 {
     #[inline]
     pub fn key(&self) -> &K {
-        self.base
-            .key()
-            .downcast_ref::<K>()
-            .expect("Broken TypedMap entry")
+        self.base.key().downcast_ref::<K>().expect(INVALID_ENTRY)
     }
 
     #[inline]
     pub fn into_key(self) -> K {
-        self.base
-            .into_key()
-            .downcast::<K>()
-            .ok()
-            .expect("Broken TypedMap entry")
+        self.base.into_key().downcast::<K>().expect(INVALID_ENTRY)
     }
 
     #[inline]
@@ -116,21 +113,28 @@ where
         self.base
             .insert(value)
             .downcast_mut::<K::Value>()
-            .expect("Broken TypedMap entry")
+            .expect(INVALID_ENTRY)
     }
 }
 
-pub enum Entry<'a, K, Marker>
+pub enum Entry<'a, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
 {
-    Occupied(OccupiedEntry<'a, K, Marker>),
-    Vacant(VacantEntry<'a, K, Marker>),
+    Occupied(OccupiedEntry<'a, K, KB, VB, Marker>),
+    Vacant(VacantEntry<'a, K, KB, VB, Marker>),
 }
 
-pub(crate) fn map_entry<Marker, K: 'static + TypedMapKey<Marker>>(
-    entry: std::collections::hash_map::Entry<'_, TypedKey, TypedMapValue>,
-) -> Entry<'_, K, Marker> {
+pub(crate) fn map_entry<Marker, K, KB, VB>(
+    entry: std::collections::hash_map::Entry<'_, TypedKey<KB>, TypedMapValue<VB>>,
+) -> Entry<'_, K, KB, VB, Marker>
+where
+    K: 'static + TypedMapKey<Marker>,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
+{
     match entry {
         std::collections::hash_map::Entry::Occupied(base) => Entry::Occupied(OccupiedEntry {
             base,
@@ -145,7 +149,12 @@ pub(crate) fn map_entry<Marker, K: 'static + TypedMapKey<Marker>>(
     }
 }
 
-impl<'a, Marker, K: 'static + TypedMapKey<Marker>> Entry<'a, K, Marker> {
+impl<'a, Marker, K, KB, VB> Entry<'a, K, KB, VB, Marker>
+where
+    K: 'static + TypedMapKey<Marker>,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
+{
     #[inline]
     pub fn or_insert(self, default: K::Value) -> &'a mut K::Value {
         match self {
@@ -183,9 +192,13 @@ impl<'a, Marker, K: 'static + TypedMapKey<Marker>> Entry<'a, K, Marker> {
     }
 }
 
-impl<'a, Marker, K: 'static + TypedMapKey<Marker>> Entry<'a, K, Marker>
+impl<'a, Marker, K, KB, VB> Entry<'a, K, KB, VB, Marker>
 where
-    K::Value: Default,
+    K: 'static,
+    K::Value: 'static + Default,
+    K: 'static + TypedMapKey<Marker>,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
 {
     pub fn or_default(self) -> &'a mut K::Value {
         match self {

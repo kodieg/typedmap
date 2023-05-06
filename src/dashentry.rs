@@ -1,28 +1,34 @@
+//! Entry type for TypedDashMap
 use std::{hash::BuildHasher, marker::PhantomData};
 
-use crate::typedvalue::SyncTypedMapValue;
+use crate::bounds::{Bounds, HasBounds};
+use crate::typedvalue::TypedMapValue;
 use crate::TypedMapKey;
-use crate::{dashmap::RefMut, typedkey::SyncTypedKey};
+use crate::{dashmap::RefMut, typedkey::TypedKey};
 
-pub struct OccupiedEntry<'a, K, Marker, S>
+const INVALID_ENTRY: &str = "Broken TypedDashMap: invalid entry";
+
+pub struct OccupiedEntry<'a, K, KB, VB, Marker, S>
 where
     K: 'static + TypedMapKey<Marker>,
-    K::Value: Send + Sync,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
     S: BuildHasher,
 {
-    base: dashmap::mapref::entry::OccupiedEntry<'a, SyncTypedKey, SyncTypedMapValue, S>,
-    _phantom: std::marker::PhantomData<Marker>,
-    _phantom_key: std::marker::PhantomData<K>,
+    base: dashmap::mapref::entry::OccupiedEntry<'a, TypedKey<KB>, TypedMapValue<VB>, S>,
+    _phantom: PhantomData<Marker>,
+    _phantom_key: PhantomData<K>,
 }
 
-impl<'a, K, Marker, S> OccupiedEntry<'a, K, Marker, S>
+impl<'a, K, KB, VB, Marker, S> OccupiedEntry<'a, K, KB, VB, Marker, S>
 where
     K: 'static + TypedMapKey<Marker>,
-    K::Value: Send + Sync,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
     S: BuildHasher,
 {
     #[inline]
-    pub fn into_ref(self) -> RefMut<'a, Marker, K, S> {
+    pub fn into_ref(self) -> RefMut<'a, Marker, K, KB, VB, S> {
         let refmut = self.base.into_ref();
 
         RefMut(refmut, PhantomData, PhantomData)
@@ -30,17 +36,14 @@ where
 
     #[inline]
     pub fn key(&self) -> &K {
-        self.base
-            .key()
-            .downcast_ref::<K>()
-            .expect("Broken TypedMap entry")
+        self.base.key().downcast_ref::<K>().expect(INVALID_ENTRY)
     }
 
     #[inline]
     pub fn remove_entry(self) -> (K, K::Value) {
         let (k, v) = self.base.remove_entry();
-        let v = v.downcast::<K::Value>().expect("Broken TypedMap entry");
-        let k = k.downcast::<K>().ok().expect("Broken TypedMap entry");
+        let v = v.downcast::<K::Value>().expect(INVALID_ENTRY);
+        let k = k.downcast::<K>().expect(INVALID_ENTRY);
         (k, v)
     }
 
@@ -49,7 +52,7 @@ where
         self.base
             .get()
             .downcast_ref::<K::Value>()
-            .expect("Broken TypedMap entry")
+            .expect(INVALID_ENTRY)
     }
 
     #[inline]
@@ -57,16 +60,16 @@ where
         self.base
             .get_mut()
             .downcast_mut::<K::Value>()
-            .expect("Broken TypedMap entry")
+            .expect(INVALID_ENTRY)
     }
 
     #[inline]
     pub fn insert(&mut self, value: K::Value) -> K::Value {
-        let value = SyncTypedMapValue::from_value(value);
+        let value = TypedMapValue::from_value(value);
         self.base
             .insert(value)
             .downcast::<K::Value>()
-            .expect("Broken TypedMap entry")
+            .expect(INVALID_ENTRY)
     }
 
     #[inline]
@@ -74,68 +77,67 @@ where
         self.base
             .remove()
             .downcast::<K::Value>()
-            .expect("Broken TypedMap entry")
+            .expect(INVALID_ENTRY)
     }
 }
 
-pub struct VacantEntry<'a, K, Marker, S>
+pub struct VacantEntry<'a, K, KB, VB, Marker, S>
 where
     K: 'static + TypedMapKey<Marker>,
-    K::Value: Send + Sync,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
     S: BuildHasher,
 {
-    base: dashmap::mapref::entry::VacantEntry<'a, SyncTypedKey, SyncTypedMapValue, S>,
-    _phantom: std::marker::PhantomData<Marker>,
-    _phantom_key: std::marker::PhantomData<K>,
+    base: dashmap::mapref::entry::VacantEntry<'a, TypedKey<KB>, TypedMapValue<VB>, S>,
+    _phantom: PhantomData<Marker>,
+    _phantom_key: PhantomData<K>,
 }
 
-impl<'a, K, Marker, S> VacantEntry<'a, K, Marker, S>
+impl<'a, K, KB, VB, Marker, S> VacantEntry<'a, K, KB, VB, Marker, S>
 where
     K: 'static + TypedMapKey<Marker>,
-    K::Value: Send + Sync,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
     S: BuildHasher,
 {
     #[inline]
     pub fn key(&self) -> &K {
-        self.base
-            .key()
-            .downcast_ref::<K>()
-            .expect("Broken TypedMap entry")
+        self.base.key().downcast_ref::<K>().expect(INVALID_ENTRY)
     }
 
     #[inline]
     pub fn into_key(self) -> K {
-        self.base
-            .into_key()
-            .downcast::<K>()
-            .ok()
-            .expect("Broken TypedMap entry")
+        self.base.into_key().downcast::<K>().expect(INVALID_ENTRY)
     }
 
     #[inline]
-    pub fn insert(self, value: K::Value) -> RefMut<'a, Marker, K, S> {
-        let value = SyncTypedMapValue::from_value(value);
+    pub fn insert(self, value: K::Value) -> RefMut<'a, Marker, K, KB, VB, S> {
+        let value = TypedMapValue::from_value(value);
         let refmut = self.base.insert(value);
 
         RefMut(refmut, PhantomData, PhantomData)
     }
 }
 
-pub enum Entry<'a, K, Marker, S>
+pub enum Entry<'a, K, KB, VB, Marker, S>
 where
     K: 'static + TypedMapKey<Marker>,
-    K::Value: Send + Sync,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
     S: BuildHasher,
 {
-    Occupied(OccupiedEntry<'a, K, Marker, S>),
-    Vacant(VacantEntry<'a, K, Marker, S>),
+    Occupied(OccupiedEntry<'a, K, KB, VB, Marker, S>),
+    Vacant(VacantEntry<'a, K, KB, VB, Marker, S>),
 }
 
-pub(crate) fn map_entry<Marker, K: 'static + TypedMapKey<Marker>, S: BuildHasher>(
-    entry: dashmap::mapref::entry::Entry<'_, SyncTypedKey, SyncTypedMapValue, S>,
-) -> Entry<'_, K, Marker, S>
+pub(crate) fn map_entry<Marker, K, KB, VB, S>(
+    entry: dashmap::mapref::entry::Entry<'_, TypedKey<KB>, TypedMapValue<VB>, S>,
+) -> Entry<'_, K, KB, VB, Marker, S>
 where
-    K::Value: Send + Sync,
+    K: 'static + TypedMapKey<Marker>,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
+    S: BuildHasher,
 {
     match entry {
         dashmap::mapref::entry::Entry::Occupied(base) => Entry::Occupied(OccupiedEntry {
@@ -151,12 +153,15 @@ where
     }
 }
 
-impl<'a, Marker, K: 'static + TypedMapKey<Marker>, S: BuildHasher> Entry<'a, K, Marker, S>
+impl<'a, Marker, K, KB, VB, S> Entry<'a, K, KB, VB, Marker, S>
 where
-    K::Value: Send + Sync,
+    K: 'static + TypedMapKey<Marker>,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
+    S: BuildHasher,
 {
     #[inline]
-    pub fn or_insert(self, default: K::Value) -> RefMut<'a, Marker, K, S> {
+    pub fn or_insert(self, default: K::Value) -> RefMut<'a, Marker, K, KB, VB, S> {
         match self {
             Self::Occupied(entry) => entry.into_ref(),
             Self::Vacant(entry) => entry.insert(default),
@@ -164,7 +169,10 @@ where
     }
 
     #[inline]
-    pub fn or_insert_with<F: FnOnce() -> K::Value>(self, default: F) -> RefMut<'a, Marker, K, S> {
+    pub fn or_insert_with<F: FnOnce() -> K::Value>(
+        self,
+        default: F,
+    ) -> RefMut<'a, Marker, K, KB, VB, S> {
         match self {
             Self::Occupied(entry) => entry.into_ref(),
             Self::Vacant(entry) => entry.insert(default()),
@@ -192,12 +200,15 @@ where
     }
 }
 
-impl<'a, Marker, K: 'static + TypedMapKey<Marker>, S: BuildHasher> Entry<'a, K, Marker, S>
+impl<'a, Marker, K, KB, VB, S> Entry<'a, K, KB, VB, Marker, S>
 where
-    K::Value: Default,
-    K::Value: Send + Sync,
+    K: 'static + TypedMapKey<Marker>,
+    K::Value: 'static + Default,
+    KB: 'static + Bounds + HasBounds<K>,
+    VB: 'static + Bounds + HasBounds<K::Value>,
+    S: BuildHasher,
 {
-    pub fn or_default(self) -> RefMut<'a, Marker, K, S> {
+    pub fn or_default(self) -> RefMut<'a, Marker, K, KB, VB, S> {
         match self {
             Self::Occupied(entry) => entry.into_ref(),
             Self::Vacant(entry) => entry.insert(Default::default()),

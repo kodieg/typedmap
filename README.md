@@ -178,6 +178,72 @@ t1.join().unwrap();
 t2.join().unwrap();
 ```
 
+By default
+`TypedMap` accepts keys and values that implement `std::any::Any` trait (and of course `TypedMapKey` trait),
+while `TypedDashMap` requires that keys and values meet `std::any::Any + Send + Sync` bounds.
+However, both `TypedMap` and `TypedDashMap` can be parametrized with two type parameters: key bounds (`KB`) and value bounds (`VB`).
+This mechanism allows to restrict what kind of keys and values can be stored in the hashmap. This crate provides four implementations of bounds:
+ * `bounds::AnyBounds` - represents `Any` bounds (used by default in `TypedMap`),
+ * `bounds::SyncAnyBounds` - represents `Any + Sync + Send` bounds (used by default in `TypedDashMap`),
+ * `clone::CloneBounds` (if `clone` feature is enabled)  - represents `Clone + Any` bounds - allows to restrict keys/values to clonable types,
+ * `clone::SyncCloneBounds` (if `clone` feature is enabled) - represents `Clone + Any + Send + Sync` bounds.
+
+These bounds can be specified in the type signature, e.g.
+```rust
+use typedmap::{TypedMap, TypedMapKey};
+use typedmap::clone::{CloneBounds};
+let mut map: TypedMap::<(), CloneBounds, CloneBounds, _> = TypedMap::new_with_bounds();
+```
+
+It is possible to define own bounds using Bounds and HasBounds traits to add custom restrictions to values. For example, you may want to enforce that each value implements a custom Component trait. This can be done with a few lines of code using impl_custom_bounds and impl_dyn_trait_wrapper macros.
+
+```rust
+// Your custom marker (could use also () as well)
+use typedmap::{impl_custom_bounds, impl_dyn_trait_wrapper, SyncAnyBounds, TypedDashMap, TypedMapKey};
+struct Components;
+
+// Trait that each value should implement
+trait Component {
+    fn is_ready(&self) -> bool;
+}
+
+// Bounds
+struct ComponentSyncBounds;
+
+// This defines DynComponent that will be Any + Component, used internally to keep values
+impl_dyn_trait_wrapper!(DynComponent, Component);
+// This defines new "bounds" struct, that requires to impl Component and uses
+// dyn DynComponent + Send + Sync as a value container
+impl_custom_bounds!(ComponentSyncBounds, DynComponent, Component, +Send+Sync);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+struct RepositoryKey(usize);
+struct Repository(String);
+
+impl TypedMapKey<Components> for RepositoryKey {
+    type Value = Repository;
+}
+
+impl Component for Repository {
+    fn is_ready(&self) -> bool {
+        true
+    }
+}
+
+// Create a new TypedDashMap that uses Components marker, keys may be Any, but value must impl Component
+let state: TypedDashMap<Components, SyncAnyBounds, ComponentSyncBounds> = TypedDashMap::new_with_bounds();
+state.insert(RepositoryKey(3), Repository("three".into()));
+
+let iter = state.iter().filter(|v| {
+    // We can obtain reference to DynContainer
+    let dyn_container = v.value_container_ref();
+    // and from DynContainer reference to &dyn Container using as_object function
+    let component = dyn_container.as_object();
+    component.is_ready()
+});
+assert_eq!(iter.count(), 1);
+```
+
 ## Related:
 
  * type-map - hashmap that uses types as keys

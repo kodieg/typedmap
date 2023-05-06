@@ -1,8 +1,8 @@
 [package]
 name = "typedmap"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["Konrad Gołuchowski <kodieg@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "A hash map (dash map). A type of value is defined by trait implemented on key type"
 license = "MIT OR Apache-2.0"
 keywords = ["hashmap", "typed", "dashmap", "anymap", "typemap"]
@@ -10,8 +10,12 @@ categories = ["data-structures", "concurrency"]
 repository = "https://github.com/kodieg/typedmap/"
 readme = "README.md"
 
+[features]
+clone = ["dyn-clone"]
+
 [dependencies]
-dashmap = { version = "5.3.4", optional = true }
+dashmap = { version = "5.4.0", optional = true }
+dyn-clone = { version = "1.0.10", optional = true }
 
 [package.metadata.docs.rs]
 all-features = true

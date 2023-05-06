@@ -1,94 +1,82 @@
 use std::any::Any;
+use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
-use std::marker::PhantomData;
 
-use crate::dynhash::{DowncastDynHash, DynHash};
-use crate::TypedMapKey;
+use crate::bounds::{Bounds, ContainerWithHash, HasBounds};
+use crate::dynhash::DynHash;
 
-pub(crate) struct TypedKeyBase<U: AsRef<T>, T>
-where
-    T: ?Sized + DynHash,
-{
-    key: U,
-    _phantom: PhantomData<T>,
-}
+pub(crate) struct TypedKey<B: Bounds>(Box<B::KeyContainer>);
 
-impl<U: AsRef<T>, T> Hash for TypedKeyBase<U, T>
-where
-    T: ?Sized + DynHash,
-{
+impl<B: Bounds> Hash for TypedKey<B> {
     fn hash<H>(&self, hasher: &mut H)
     where
-        H: std::hash::Hasher,
+        H: Hasher,
     {
-        self.key.as_ref().dyn_hash(hasher)
+        self.0.as_dyn_hash().dyn_hash(hasher)
     }
 }
 
-impl<U: AsRef<T>, T> PartialEq for TypedKeyBase<U, T>
-where
-    T: ?Sized + DynHash,
-{
+impl<B: Bounds> PartialEq for TypedKey<B> {
     fn eq(&self, other: &Self) -> bool {
-        self.key.as_ref().dyn_eq(other.key.as_ref().as_dyn_eq())
+        self.0
+            .as_dyn_hash()
+            .dyn_eq(other.0.as_dyn_hash().as_dyn_eq())
     }
 }
 
-impl<U: AsRef<T>, T> Eq for TypedKeyBase<U, T> where T: ?Sized + DynHash {}
+impl<B: Bounds> Eq for TypedKey<B> {}
 
-pub(crate) type TypedKey = TypedKeyBase<Box<dyn DynHash>, dyn DynHash>;
-pub(crate) type SyncTypedKey =
-    TypedKeyBase<Box<dyn DynHash + Send + Sync>, dyn DynHash + Send + Sync>;
+impl<B: 'static + Bounds> Debug for TypedKey<B> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("TypedKey")
+    }
+}
 
-impl TypedKeyBase<Box<dyn DynHash>, dyn DynHash> {
-    pub fn from_key<Marker, K: 'static + TypedMapKey<Marker>>(key: K) -> Self {
-        Self {
-            key: Box::new(key),
-            _phantom: PhantomData,
+impl<B: 'static + Bounds> TypedKey<B> {
+    pub fn downcast<K: 'static>(self) -> Result<K, Self>
+    where
+        B: HasBounds<K>,
+    {
+        if self.is::<K>() {
+            Ok(*B::downcast_box(self.0.into_box_container())
+                .unwrap_or_else(|_| panic!("downcast failed")))
+        } else {
+            Err(self)
         }
     }
-}
 
-impl<U, T> TypedKeyBase<U, T>
-where
-    U: DowncastDynHash,
-    U: AsRef<T>,
-    T: ?Sized + DynHash,
-{
-    pub fn downcast<K: 'static>(self) -> Result<K, Self> {
-        self.key
-            .downcast::<K>()
-            .map(|v| *v)
-            .map_err(|key| TypedKeyBase {
-                key,
-                _phantom: PhantomData,
-            })
-    }
-}
-
-impl<U, T> TypedKeyBase<U, T>
-where
-    U: AsRef<T>,
-    T: ?Sized + DynHash,
-{
-    pub fn downcast_ref<K: 'static>(&self) -> Option<&K> {
-        self.key.as_ref().as_any().downcast_ref::<K>()
+    pub fn downcast_ref<K: 'static>(&self) -> Option<&K>
+    where
+        B: HasBounds<K>,
+    {
+        B::downcast_ref(self.0.as_container())
     }
 
     pub fn as_any(&self) -> &dyn Any {
-        self.key.as_ref().as_any()
+        self.0.as_dyn_hash().as_any()
     }
-}
 
-impl TypedKeyBase<Box<dyn DynHash + Send + Sync>, dyn DynHash + Send + Sync> {
-    pub fn from_key<Marker, K: 'static + TypedMapKey<Marker> + Send + Sync>(key: K) -> Self
+    pub fn is<K: 'static>(&self) -> bool {
+        B::as_any(self.0.as_container()).is::<K>()
+    }
+
+    pub fn from_key<K: 'static + Hash + Eq>(key: K) -> TypedKey<B>
     where
-        K::Value: Send + Sync,
+        B: HasBounds<K>,
     {
-        Self {
-            key: Box::new(key),
-            _phantom: PhantomData,
-        }
+        TypedKey(B::box_key(key))
+    }
+
+    pub fn as_container(&self) -> &B::Container {
+        self.0.as_container()
+    }
+
+    pub fn as_mut_container(&mut self) -> &mut B::Container {
+        self.0.as_mut_container()
+    }
+
+    pub fn into_box_container(self) -> Box<B::Container> {
+        self.0.into_box_container()
     }
 }
 
@@ -110,15 +98,9 @@ impl<'a> PartialEq for dyn Key + 'a {
 
 impl<'a> Eq for dyn Key + 'a {}
 
-impl Key for TypedKeyBase<Box<dyn DynHash>, dyn DynHash> {
+impl<B: Bounds> Key for TypedKey<B> {
     fn key(&self) -> &dyn DynHash {
-        &*self.key
-    }
-}
-
-impl Key for TypedKeyBase<Box<dyn DynHash + Send + Sync>, dyn DynHash + Send + Sync> {
-    fn key(&self) -> &dyn DynHash {
-        &*self.key
+        self.0.as_dyn_hash()
     }
 }
 
@@ -127,7 +109,7 @@ pub(crate) struct TypedKeyRef<'a> {
 }
 
 impl<'a> TypedKeyRef<'a> {
-    pub fn from_key_ref<Marker, K: 'static + TypedMapKey<Marker>>(key: &'a K) -> Self {
+    pub fn from_key_ref<K: 'static + Hash + Eq>(key: &'a K) -> Self {
         Self {
             key: key as &dyn DynHash,
         }
@@ -140,15 +122,7 @@ impl<'a> Key for TypedKeyRef<'a> {
     }
 }
 
-impl<'a> std::borrow::Borrow<dyn Key + 'a> for TypedKeyBase<Box<dyn DynHash>, dyn DynHash> {
-    fn borrow(&self) -> &(dyn Key + 'a) {
-        self
-    }
-}
-
-impl<'a> std::borrow::Borrow<dyn Key + 'a>
-    for TypedKeyBase<Box<dyn DynHash + Send + Sync>, dyn DynHash + Send + Sync>
-{
+impl<'a, B: Bounds + 'a> std::borrow::Borrow<dyn Key + 'a> for TypedKey<B> {
     fn borrow(&self) -> &(dyn Key + 'a) {
         self
     }
