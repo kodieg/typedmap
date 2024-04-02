@@ -204,6 +204,44 @@ where
         Some(old_value.downcast::<K::Value>().expect(INVALID_VALUE))
     }
 
+    /// Inserts a TypedKeyValue into the map from .
+    ///
+    /// If the map did not have this key present, None is returned.
+    ///
+    /// If the map did have this key present, the value is updated, and the old value is returned.
+    ///
+    /// # Examples
+    /// ```
+    /// use typedmap::hashmap::TypedKeyValue;
+    /// use typedmap::{TypedDashMap};
+    /// use typedmap::TypedMapKey;
+    ///
+    /// #[derive(Hash, PartialEq, Eq)]
+    /// struct Key(usize);
+    ///
+    /// impl TypedMapKey for Key {
+    ///     type Value = usize;
+    /// }
+    ///
+    /// let mut map: TypedDashMap = TypedDashMap::with_capacity(10);
+    /// let kv = TypedKeyValue::new(Key(3), 4);
+    /// map.insert_key_value(kv);
+    /// assert_eq!(*map.get(&Key(3)).unwrap().value(), 4);
+    /// ```
+    pub fn insert_key_value(
+        &mut self,
+        key_value: TypedKeyValue<Marker, KB, VB>,
+    ) -> Option<TypedKeyValue<Marker, KB, VB>> {
+        let entry = self.state.remove(&key_value.key);
+        self.state.insert(key_value.key, key_value.value);
+        let (key, value) = entry?;
+        Some(TypedKeyValue {
+            key,
+            value,
+            _marker: PhantomData,
+        })
+    }
+
     /// Get the entry of a key if it exists in the map.
     ///
     /// # Examples
