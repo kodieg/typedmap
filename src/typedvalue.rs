@@ -3,7 +3,7 @@ use std::fmt::{Debug, Formatter};
 
 use crate::bounds::{Bounds, HasBounds};
 
-pub(crate) struct TypedMapValue<B: Bounds>(Box<B::Container>);
+pub(crate) struct TypedMapValue<B: Bounds>(pub(crate) Box<B::Container>);
 
 impl<B: 'static + Bounds> TypedMapValue<B> {
     pub fn from_value<V: 'static>(value: V) -> Self

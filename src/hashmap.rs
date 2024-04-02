@@ -188,6 +188,44 @@ where
         old_value.and_then(|v| v.downcast::<K::Value>().ok())
     }
 
+    /// Inserts a TypedKeyValue into the map from .
+    ///
+    /// If the map did not have this key present, None is returned.
+    ///
+    /// If the map did have this key present, the value is updated, and the old value is returned.
+    ///
+    /// # Examples
+    /// ```
+    /// use typedmap::hashmap::TypedKeyValue;
+    /// use typedmap::TypedMap;
+    /// use typedmap::TypedMapKey;
+    ///
+    /// #[derive(Hash, PartialEq, Eq)]
+    /// struct Key(usize);
+    ///
+    /// impl TypedMapKey for Key {
+    ///     type Value = usize;
+    /// }
+    ///
+    /// let mut map: TypedMap = TypedMap::with_capacity(10);
+    /// let kv = TypedKeyValue::new(Key(3), 4);
+    /// map.insert_key_value(kv);
+    /// assert_eq!(map[&Key(3)], 4);
+    /// ```
+    pub fn insert_key_value(
+        &mut self,
+        key_value: TypedKeyValue<Marker, KB, VB>,
+    ) -> Option<TypedKeyValue<Marker, KB, VB>> {
+        let entry = self.state.remove_entry(&key_value.key);
+        self.state.insert(key_value.key, key_value.value);
+        let (key, value) = entry?;
+        Some(TypedKeyValue {
+            key,
+            value,
+            _marker: PhantomData,
+        })
+    }
+
     /// Returns a reference to the value corresponding to the key.
     ///
     /// # Examples
@@ -1275,9 +1313,9 @@ where
 
 /// Represents owned pair of key and value.
 pub struct TypedKeyValue<Marker, KB: 'static + Bounds, VB: 'static + Bounds> {
-    key: TypedKey<KB>,
-    value: TypedMapValue<VB>,
-    _marker: PhantomData<Marker>,
+    pub(crate) key: TypedKey<KB>,
+    pub(crate) value: TypedMapValue<VB>,
+    pub(crate) _marker: PhantomData<Marker>,
 }
 
 impl<Marker, KB, VB> TypedKeyValue<Marker, KB, VB>
@@ -1285,6 +1323,19 @@ where
     KB: 'static + Bounds,
     VB: 'static + Bounds,
 {
+    /// Creates a new TypedKeyValue with specified marker type.
+    pub fn new<K>(key: K, value: K::Value) -> Self
+    where
+        KB: HasBounds<K>,
+        VB: HasBounds<K::Value>,
+        K: 'static + TypedMapKey<Marker>,
+    {
+        TypedKeyValue {
+            key: TypedKey::from_key(key),
+            value: TypedMapValue::from_value(value),
+            _marker: PhantomData,
+        }
+    }
     /// Downcast key to reference of `K`. Returns `None` if not possible.
     pub fn downcast_key_ref<K: 'static + TypedMapKey<Marker>>(&self) -> Option<&K>
     where
@@ -1470,6 +1521,45 @@ impl<M, KB: 'static + Bounds, VB: 'static + Bounds> Debug for TypedKeyValueRef<'
     }
 }
 
+#[cfg(feature = "clone")]
+impl<M, KB: Bounds, VB: Bounds> TypedKeyValueRef<'_, M, KB, VB>
+where
+    KB::KeyContainer: crate::clone::CloneAny,
+    VB::Container: crate::clone::CloneAny,
+{
+    /// Turns borrowed key/value pair into owned [TypedKeyValue](crate::hashmap::TypedKeyValue) by cloning key & value.
+    ///
+    /// ```rust
+    /// use typedmap::TypedMap;
+    /// use typedmap::clone::SyncCloneBounds;
+    /// use typedmap::TypedMapKey;
+    ///
+    /// #[derive(Hash, PartialEq, Eq, Debug, Clone)]
+    /// struct Key(usize);
+    ///
+    /// impl TypedMapKey for Key {
+    ///     type Value = u32;
+    /// }
+    ///
+    /// let mut map: TypedMap<(), SyncCloneBounds, SyncCloneBounds> = TypedMap::new_with_bounds();
+    /// map.insert(Key(3), 3);
+    ///
+    /// let mut new_map: TypedMap<(), SyncCloneBounds, SyncCloneBounds> = TypedMap::new_with_bounds();
+    /// for entry in map.iter() {
+    ///     new_map.insert_key_value(entry.to_owned());
+    /// }
+    /// ```
+    pub fn to_owned(&self) -> TypedKeyValue<M, KB, VB> {
+        let key = crate::clone::clone_box(&*self.key.0);
+        let value = crate::clone::clone_box(self.value.as_container());
+        TypedKeyValue {
+            key: TypedKey(key),
+            value: TypedMapValue(value),
+            _marker: self._marker,
+        }
+    }
+}
+
 /// Represents mutably borrowed pair of key and value.
 pub struct TypedKeyValueMutRef<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds> {
     key: &'a TypedKey<KB>,
@@ -1631,9 +1721,58 @@ where
     }
 }
 
+#[cfg(feature = "clone")]
+impl<M, KB: Bounds, VB: Bounds> TypedKeyValueMutRef<'_, M, KB, VB>
+where
+    KB::KeyContainer: crate::clone::CloneAny,
+    VB::Container: crate::clone::CloneAny,
+{
+    /// Turns borrowed key/value pair into owned [TypedKeyValue](crate::hashmap::TypedKeyValue) by cloning key & value.
+    ///
+    /// ```rust
+    /// use typedmap::TypedMap;
+    /// use typedmap::clone::SyncCloneBounds;
+    /// use typedmap::TypedMapKey;
+    ///
+    /// #[derive(Hash, PartialEq, Eq, Debug, Clone)]
+    /// struct Key(usize);
+    ///
+    /// impl TypedMapKey for Key {
+    ///     type Value = u32;
+    /// }
+    ///
+    /// let mut map: TypedMap<(), SyncCloneBounds, SyncCloneBounds> = TypedMap::new_with_bounds();
+    /// map.insert(Key(3), 3);
+    ///
+    /// let mut new_map: TypedMap<(), SyncCloneBounds, SyncCloneBounds> = TypedMap::new_with_bounds();
+    /// for entry in map.iter_mut() {
+    ///     new_map.insert_key_value(entry.to_owned());
+    /// }
+    /// ```
+    pub fn to_owned(&self) -> TypedKeyValue<M, KB, VB> {
+        let key = crate::clone::clone_box(&*self.key.0);
+        let value = crate::clone::clone_box(self.value.as_container());
+        TypedKeyValue {
+            key: TypedKey(key),
+            value: TypedMapValue(value),
+            _marker: self._marker,
+        }
+    }
+}
+
 impl<M, KB: 'static + Bounds, VB: 'static + Bounds> Debug for TypedKeyValueMutRef<'_, M, KB, VB> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("TypedMutRef")
+    }
+}
+
+impl<M, KB: Bounds, VB: Bounds> FromIterator<TypedKeyValue<M, KB, VB>> for TypedMap<M, KB, VB> {
+    fn from_iter<T: IntoIterator<Item = TypedKeyValue<M, KB, VB>>>(iter: T) -> Self {
+        let state = iter.into_iter().map(|i| (i.key, i.value)).collect();
+        TypedMap {
+            state,
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -1643,6 +1782,11 @@ mod tests {
 
     use crate::TypedMap;
     use crate::TypedMapKey;
+
+    struct M;
+    impl TypedMapKey<M> for String {
+        type Value = String;
+    }
 
     #[test]
     fn test_basic_use() {
@@ -1793,5 +1937,15 @@ mod tests {
 
         assert!(state.is_empty());
         assert_eq!(state.len(), 0);
+    }
+
+    #[test]
+    fn test_from_iterator() {
+        let mut state: TypedMap<M> = TypedMap::new();
+        state.insert("key".to_owned(), "value".to_owned());
+
+        let new_map: TypedMap<M> = state.into_iter().collect();
+
+        assert_eq!(new_map.get(&"key".to_owned()), Some(&"value".to_owned()));
     }
 }

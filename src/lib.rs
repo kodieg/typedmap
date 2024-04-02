@@ -114,7 +114,8 @@ let mut map: TypedMap::<(), CloneBounds, CloneBounds, _> = TypedMap::new_with_bo
 //!
 //! It is possible to define own bounds using [Bounds](bounds::Bounds) and [HasBounds](bounds::HasBounds) traits to add custom restrictions to values.
 //! For example, you may want to enforce that each value implements a custom `Component` trait.
-//! This can be done with a few lines of code using [impl_custom_bounds](crate::impl_custom_bounds) and [impl_dyn_trait_wrapper](crate::impl_dyn_trait_wrapper) macros.
+//! This can be done with a few lines of code using [impl_custom_bounds](crate::impl_custom_bounds) or [impl_custom_bounds_with_key_container](crate::impl_custom_bounds_with_key_container)
+//! and [impl_dyn_trait_wrapper](crate::impl_dyn_trait_wrapper) macros.
 #![cfg_attr(
     feature = "dashmap",
     doc = r#"
