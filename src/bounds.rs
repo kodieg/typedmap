@@ -179,19 +179,19 @@ where
 /// Trait that marks that specific type fulfill specified bounds.
 /// For example `HasBounds<CloneBounds>` is implemented for all types that are implement Clone & Any.
 pub trait HasBounds<T: 'static>: Bounds {
-    /// Converts from Box<T> to Box<Container>
+    /// Converts from `Box<T>` to `Box<Container>`
     fn cast_box(this: Box<T>) -> Box<Self::Container>;
-    /// Converts from &T to &Container
+    /// Converts from `&T` to `&Container`
     fn as_ref(this: &T) -> &Self::Container;
-    /// Converts from &mut T to &mut Container
+    /// Converts from `&mut T` to `&mut Container`
     fn as_mut(this: &mut T) -> &mut Self::Container;
 
-    /// Converts from Box<T> to Box<KeyContainer>
+    /// Converts from `Box<T>` to `Box<KeyContainer>`
     fn cast_key_box(this: Box<T>) -> Box<Self::KeyContainer>
     where
         T: 'static + Sized + Hash + Eq;
 
-    /// Boxes key of type T as Box<KeyContainer>
+    /// Boxes key of type `T` as `Box<KeyContainer>`
     fn box_key(this: T) -> Box<Self::KeyContainer>
     where
         T: 'static + Sized + Hash + Eq,
@@ -199,7 +199,7 @@ pub trait HasBounds<T: 'static>: Bounds {
         Self::cast_key_box(Box::new(this))
     }
 
-    /// Boxes value of type T as Box<Container>
+    /// Boxes value of type `T` as `Box<Container>`
     fn box_value(this: T) -> Box<Self::Container>
     where
         Self: Sized,
@@ -207,7 +207,7 @@ pub trait HasBounds<T: 'static>: Bounds {
         Self::cast_box(Box::new(this))
     }
 
-    /// Attempts to downcast &Container to &T
+    /// Attempts to downcast `&Container` to `&T`
     fn downcast_ref(this: &Self::Container) -> Option<&T>
     where
         Self: 'static + Sized,
@@ -216,7 +216,7 @@ pub trait HasBounds<T: 'static>: Bounds {
         any.downcast_ref()
     }
 
-    /// Attempts to downcast &mut Container to &mut T
+    /// Attempts to downcast `&mut Container` to `&mut T`
     fn downcast_mut(this: &mut Self::Container) -> Option<&mut T>
     where
         Self: 'static + Sized,
@@ -225,7 +225,7 @@ pub trait HasBounds<T: 'static>: Bounds {
         any.downcast_mut()
     }
 
-    /// Attempts to downcast Box<Container> to Box<T>
+    /// Attempts to downcast `Box<Container>` to `Box<T>`
     fn downcast_box(this: Box<Self::Container>) -> Result<Box<T>, Box<Self::Container>>
     where
         Self: 'static + Sized,
@@ -576,8 +576,22 @@ macro_rules! impl_custom_bounds {
         $crate::impl_custom_bounds!($bounds, $dyn, $trait_name, );
     };
     ($bounds:ident, $dyn:ident, $trait_name:ident, $(+ $marker_traits:ident)*) => {
+        $crate::impl_custom_bounds_with_key_container!($bounds, $dyn, dyn $crate::bounds::ContainerWithHash<$bounds> $(+ $marker_traits)*, $trait_name, $(+ $marker_traits)*);
+    }
+}
+
+/// Implements [`Bounds`] & [`HasBounds`] traits for `$bounds` using `$dyn` trait object and wrapping `$trait_name` specifying KeyContainer with `$key_container`.
+/// Together with [impl_dyn_trait_wrapper](crate::impl_dyn_trait_wrapper) macro, it serves as simple way to implement custom [`Bounds`].
+///
+/// For example see how [ContainerWithHashAndClone](crate::clone::ContainerWithHashAndClone) is used as KeyContainer to allow key to be cloneable.
+#[macro_export]
+macro_rules! impl_custom_bounds_with_key_container {
+    ($bounds:ident, $dyn:ident, $key_container:ty, $trait_name:ident) => {
+        $crate::impl_custom_bounds_with_key_container!($bounds, $dyn, $key_container, $trait_name, );
+    };
+    ($bounds:ident, $dyn:ident, $key_container:ty, $trait_name:ident, $(+ $marker_traits:ident)*) => {
         impl $crate::bounds::Bounds for $bounds {
-            type KeyContainer = dyn $crate::bounds::ContainerWithHash<$bounds> $(+ $marker_traits)*;
+            type KeyContainer = $key_container;
             type Container = dyn $dyn $(+ $marker_traits)*;
 
             fn as_any(this: &Self::Container) -> &dyn ::std::any::Any {
@@ -610,6 +624,5 @@ macro_rules! impl_custom_bounds {
                 this
             }
         }
-
     }
 }

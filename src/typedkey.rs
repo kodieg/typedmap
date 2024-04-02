@@ -5,7 +5,7 @@ use std::hash::{Hash, Hasher};
 use crate::bounds::{Bounds, ContainerWithHash, HasBounds};
 use crate::dynhash::DynHash;
 
-pub(crate) struct TypedKey<B: Bounds>(Box<B::KeyContainer>);
+pub(crate) struct TypedKey<B: Bounds>(pub(crate) Box<B::KeyContainer>);
 
 impl<B: Bounds> Hash for TypedKey<B> {
     fn hash<H>(&self, hasher: &mut H)

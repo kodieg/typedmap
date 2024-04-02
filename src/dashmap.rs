@@ -1,5 +1,6 @@
 //! Provides [`TypedDashMap`], a concurrent version of [TypedMap](crate::TypedMap)
 use std::collections::hash_map::RandomState;
+use std::fmt::Formatter;
 use std::hash::BuildHasher;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -9,6 +10,7 @@ use dashmap::DashMap;
 
 use crate::bounds::{Bounds, HasBounds, SyncAnyBounds};
 use crate::dashentry;
+use crate::hashmap::TypedKeyValue;
 use crate::typedkey::{Key, TypedKey, TypedKeyRef};
 use crate::typedvalue::TypedMapValue;
 use crate::TypedMapKey;
@@ -200,6 +202,44 @@ where
         let old_value = self.state.insert(typed_key, value)?;
 
         Some(old_value.downcast::<K::Value>().expect(INVALID_VALUE))
+    }
+
+    /// Inserts a TypedKeyValue into the map from .
+    ///
+    /// If the map did not have this key present, None is returned.
+    ///
+    /// If the map did have this key present, the value is updated, and the old value is returned.
+    ///
+    /// # Examples
+    /// ```
+    /// use typedmap::hashmap::TypedKeyValue;
+    /// use typedmap::{TypedDashMap};
+    /// use typedmap::TypedMapKey;
+    ///
+    /// #[derive(Hash, PartialEq, Eq)]
+    /// struct Key(usize);
+    ///
+    /// impl TypedMapKey for Key {
+    ///     type Value = usize;
+    /// }
+    ///
+    /// let mut map: TypedDashMap = TypedDashMap::with_capacity(10);
+    /// let kv = TypedKeyValue::new(Key(3), 4);
+    /// map.insert_key_value(kv);
+    /// assert_eq!(*map.get(&Key(3)).unwrap().value(), 4);
+    /// ```
+    pub fn insert_key_value(
+        &mut self,
+        key_value: TypedKeyValue<Marker, KB, VB>,
+    ) -> Option<TypedKeyValue<Marker, KB, VB>> {
+        let entry = self.state.remove(&key_value.key);
+        self.state.insert(key_value.key, key_value.value);
+        let (key, value) = entry?;
+        Some(TypedKeyValue {
+            key,
+            value,
+            _marker: PhantomData,
+        })
     }
 
     /// Get the entry of a key if it exists in the map.
@@ -612,6 +652,16 @@ impl<Marker> Default for TypedDashMap<Marker> {
     }
 }
 
+impl<Marker, KB, VB, S> Debug for TypedDashMap<Marker, KB, VB, S>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("TypedDashMap:40")
+    }
+}
+
 /// An iterator over the entries of a TypedDashMap
 ///
 /// This `struct` is created by ['iter'] method on [`TypedDashMap`]. See its documentation for more.
@@ -701,6 +751,56 @@ where
 
     pub fn value_container_ref(&self) -> &VB::Container {
         self.key_value.value().as_container()
+    }
+}
+
+#[cfg(feature = "clone")]
+impl<M, KB: Bounds, VB: Bounds, S: BuildHasher> TypedKeyValueGuard<'_, M, KB, VB, S>
+where
+    KB::KeyContainer: crate::clone::CloneAny,
+    VB::Container: crate::clone::CloneAny,
+{
+    /// Turns borrowed key/value pair into owned [TypedKeyValue](crate::hashmap::TypedKeyValue) by cloning key & value.
+    ///
+    /// ```rust
+    /// use typedmap::{TypedDashMap, TypedMap};use typedmap::clone::SyncCloneBounds;
+    /// use typedmap::TypedMapKey;
+    ///
+    /// #[derive(Hash, PartialEq, Eq, Debug, Clone)]
+    /// struct Key(usize);
+    ///
+    /// impl TypedMapKey for Key {
+    ///     type Value = u32;
+    /// }
+    ///
+    /// let map: TypedDashMap<(), SyncCloneBounds, SyncCloneBounds> = TypedDashMap::new_with_bounds();
+    /// map.insert(Key(3), 3);
+    ///
+    /// let mut new_map: TypedMap<(), SyncCloneBounds, SyncCloneBounds> = TypedMap::new_with_bounds();
+    /// for entry in map.iter() {
+    ///     new_map.insert_key_value(entry.to_owned());
+    /// }
+    /// ```
+    pub fn to_owned(&self) -> TypedKeyValue<M, KB, VB> {
+        let key = crate::clone::clone_box(&*self.key_value.key().0);
+        let value = crate::clone::clone_box(self.key_value.value().as_container());
+        TypedKeyValue {
+            key: TypedKey(key),
+            value: TypedMapValue(value),
+            _marker: self._marker,
+        }
+    }
+}
+
+impl<M, KB: Bounds, VB: Bounds, S: BuildHasher + Clone + Default>
+    FromIterator<TypedKeyValue<M, KB, VB>> for TypedDashMap<M, KB, VB, S>
+{
+    fn from_iter<T: IntoIterator<Item = TypedKeyValue<M, KB, VB>>>(iter: T) -> Self {
+        let state = iter.into_iter().map(|i| (i.key, i.value)).collect();
+        TypedDashMap {
+            state,
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -817,6 +917,44 @@ where
 
     pub fn value_container_mut(&mut self) -> &mut VB::Container {
         self.key_value.value_mut().as_mut_container()
+    }
+}
+
+#[cfg(feature = "clone")]
+impl<M, KB: Bounds, VB: Bounds, S: BuildHasher> TypedKeyValueMutGuard<'_, M, KB, VB, S>
+where
+    KB::KeyContainer: crate::clone::CloneAny,
+    VB::Container: crate::clone::CloneAny,
+{
+    /// Turns borrowed key/value pair into owned [TypedKeyValue](crate::hashmap::TypedKeyValue) by cloning key & value.
+    ///
+    /// ```rust
+    /// use typedmap::{TypedDashMap, TypedMap};use typedmap::clone::SyncCloneBounds;
+    /// use typedmap::TypedMapKey;
+    ///
+    /// #[derive(Hash, PartialEq, Eq, Debug, Clone)]
+    /// struct Key(usize);
+    ///
+    /// impl TypedMapKey for Key {
+    ///     type Value = u32;
+    /// }
+    ///
+    /// let map: TypedDashMap<(), SyncCloneBounds, SyncCloneBounds> = TypedDashMap::new_with_bounds();
+    /// map.insert(Key(3), 3);
+    ///
+    /// let mut new_map: TypedMap<(), SyncCloneBounds, SyncCloneBounds> = TypedMap::new_with_bounds();
+    /// for entry in map.iter_mut() {
+    ///     new_map.insert_key_value(entry.to_owned());
+    /// }
+    /// ```
+    pub fn to_owned(&self) -> TypedKeyValue<M, KB, VB> {
+        let key = crate::clone::clone_box(&*self.key_value.key().0);
+        let value = crate::clone::clone_box(self.key_value.value().as_container());
+        TypedKeyValue {
+            key: TypedKey(key),
+            value: TypedMapValue(value),
+            _marker: self._marker,
+        }
     }
 }
 
@@ -1017,8 +1155,13 @@ mod tests {
     use std::hash::Hash;
     use std::sync::Arc;
 
-    use crate::TypedDashMap;
     use crate::TypedMapKey;
+    use crate::{SyncAnyBounds, TypedDashMap, TypedMap};
+
+    struct M;
+    impl TypedMapKey<M> for String {
+        type Value = String;
+    }
 
     #[test]
     fn test_threads() {
@@ -1053,5 +1196,18 @@ mod tests {
 
         let r = map.get(&k2).unwrap();
         assert_eq!(r.pair(), (&k2, &"v2".to_owned()));
+    }
+
+    #[test]
+    fn test_from_iterator() {
+        let mut state: TypedMap<M, SyncAnyBounds, SyncAnyBounds> = TypedMap::new_with_bounds();
+        state.insert("key".to_owned(), "value".to_owned());
+
+        let new_map: TypedDashMap<M> = state.into_iter().collect();
+
+        assert_eq!(
+            new_map.get(&"key".to_owned()).unwrap().value(),
+            &"value".to_owned()
+        );
     }
 }
