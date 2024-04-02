@@ -1,5 +1,6 @@
 //! Provides [`TypedMap`] type.
 use std::collections::HashMap;
+use std::fmt::Formatter;
 use std::hash::{BuildHasher, Hash};
 use std::iter::FusedIterator;
 use std::{any::Any, fmt::Debug, ops::Index};
@@ -872,6 +873,16 @@ where
 {
     fn default() -> Self {
         TypedMap::new_with_bounds()
+    }
+}
+
+impl<Marker, KB, VB> Debug for TypedMap<Marker, KB, VB>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("TypedMap")
     }
 }
 

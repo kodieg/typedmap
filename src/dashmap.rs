@@ -1,5 +1,6 @@
 //! Provides [`TypedDashMap`], a concurrent version of [TypedMap](crate::TypedMap)
 use std::collections::hash_map::RandomState;
+use std::fmt::Formatter;
 use std::hash::BuildHasher;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -610,6 +611,16 @@ where
 impl<Marker> Default for TypedDashMap<Marker> {
     fn default() -> Self {
         TypedDashMap::new()
+    }
+}
+
+impl<Marker, KB, VB, S> Debug for TypedDashMap<Marker, KB, VB, S>
+where
+    KB: 'static + Bounds,
+    VB: 'static + Bounds,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("TypedDashMap:40")
     }
 }
 
