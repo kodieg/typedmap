@@ -25,3 +25,11 @@
 Use AnyBounds or SyncAnyBounds when migrating from 0.3.x version. 
 - Added `iter_mut` function for TypedDashMap
 - Added macros to easily implement custom bounds struct for your own traits (see bounds module docs)
+
+# 0.5.0 (Apr 2, 2024)
+
+- Changes in ([PR 10](https://github.com/kodieg/typedmap/pull/11))
+- Added FromIterator impl for TypedMap and TypedDashMap 
+- Added Debug impl for TypedMap and TypedDashMap 
+- Added `insert_key_value` functions for TypedMap and TypedDashMap
+- Added Clone impl for TypedMap and TypedDashMap when key and values are cloneable 
