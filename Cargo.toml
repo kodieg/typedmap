@@ -14,7 +14,7 @@ readme = "README.md"
 clone = ["dyn-clone"]
 
 [dependencies]
-dashmap = { version = "5.5.3", optional = true }
+dashmap = { version = "6.0.1", optional = true }
 dyn-clone = { version = "1.0.17", optional = true }
 
 [package.metadata.docs.rs]
