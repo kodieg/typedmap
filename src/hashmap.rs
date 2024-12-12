@@ -1065,9 +1065,7 @@ pub struct Drain<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds>(
     PhantomData<Marker>,
 );
 
-impl<Marker, KB: 'static + Bounds, VB: 'static + Bounds> Iterator
-    for Drain<'_, Marker, KB, VB>
-{
+impl<Marker, KB: 'static + Bounds, VB: 'static + Bounds> Iterator for Drain<'_, Marker, KB, VB> {
     type Item = TypedKeyValue<Marker, KB, VB>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1903,8 +1901,7 @@ mod tests {
             where
                 H: std::hash::Hasher,
             {
-                hasher.write_i8(0);
-                hasher.finish();
+                0.hash(hasher);
             }
         }
 
