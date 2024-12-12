@@ -84,19 +84,19 @@ pub(crate) trait Key {
     fn key(&self) -> &dyn DynHash;
 }
 
-impl<'a> Hash for dyn Key + 'a {
+impl Hash for dyn Key + '_ {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
         self.key().hash(hasher)
     }
 }
 
-impl<'a> PartialEq for dyn Key + 'a {
+impl PartialEq for dyn Key + '_ {
     fn eq(&self, other: &dyn Key) -> bool {
         self.key().eq(other.key())
     }
 }
 
-impl<'a> Eq for dyn Key + 'a {}
+impl Eq for dyn Key + '_ {}
 
 impl<B: Bounds> Key for TypedKey<B> {
     fn key(&self) -> &dyn DynHash {
@@ -116,7 +116,7 @@ impl<'a> TypedKeyRef<'a> {
     }
 }
 
-impl<'a> Key for TypedKeyRef<'a> {
+impl Key for TypedKeyRef<'_> {
     fn key(&self) -> &dyn DynHash {
         self.key
     }

@@ -1065,8 +1065,8 @@ pub struct Drain<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds>(
     PhantomData<Marker>,
 );
 
-impl<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds> Iterator
-    for Drain<'a, Marker, KB, VB>
+impl<Marker, KB: 'static + Bounds, VB: 'static + Bounds> Iterator
+    for Drain<'_, Marker, KB, VB>
 {
     type Item = TypedKeyValue<Marker, KB, VB>;
 
