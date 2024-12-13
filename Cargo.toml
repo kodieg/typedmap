@@ -1,6 +1,6 @@
 [package]
 name = "typedmap"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Konrad Gołuchowski <kodieg@gmail.com>"]
 edition = "2021"
 description = "A hash map (dash map). A type of value is defined by trait implemented on key type"
