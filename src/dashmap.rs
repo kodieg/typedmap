@@ -711,7 +711,7 @@ pub struct TypedKeyValueGuard<'a, Marker, KB: 'static + Bounds, VB: 'static + Bo
     _marker: PhantomData<Marker>,
 }
 
-impl<'a, Marker, KB, VB, S> TypedKeyValueGuard<'a, Marker, KB, VB, S>
+impl<Marker, KB, VB, S> TypedKeyValueGuard<'_, Marker, KB, VB, S>
 where
     KB: 'static + Bounds,
     VB: 'static + Bounds,
@@ -853,7 +853,7 @@ pub struct TypedKeyValueMutGuard<'a, Marker, KB: 'static + Bounds, VB: 'static +
     _marker: PhantomData<Marker>,
 }
 
-impl<'a, Marker, KB, VB, S> TypedKeyValueMutGuard<'a, Marker, KB, VB, S>
+impl<Marker, KB, VB, S> TypedKeyValueMutGuard<'_, Marker, KB, VB, S>
 where
     KB: 'static + Bounds,
     VB: 'static + Bounds,
@@ -969,7 +969,7 @@ where
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>;
 
-impl<'a, Marker, K, KB, VB, S> Ref<'a, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB, S> Ref<'_, Marker, K, KB, VB, S>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
@@ -992,7 +992,7 @@ where
     }
 }
 
-impl<'a, Marker, K, KB, VB, S> Deref for Ref<'a, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB, S> Deref for Ref<'_, Marker, K, KB, VB, S>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
@@ -1006,7 +1006,7 @@ where
     }
 }
 
-impl<'a, Marker, K, KB, VB, S> Debug for Ref<'a, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB, S> Debug for Ref<'_, Marker, K, KB, VB, S>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
@@ -1030,7 +1030,7 @@ where
     VB: 'static + Bounds + HasBounds<K::Value>,
     S: BuildHasher;
 
-impl<'a, Marker, K, KB, VB, S> RefMut<'a, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB, S> RefMut<'_, Marker, K, KB, VB, S>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
@@ -1067,7 +1067,7 @@ where
     }
 }
 
-impl<'a, Marker, K, KB, VB, S> Deref for RefMut<'a, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB, S> Deref for RefMut<'_, Marker, K, KB, VB, S>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
@@ -1081,7 +1081,7 @@ where
     }
 }
 
-impl<'a, Marker, K, KB, VB, S> DerefMut for RefMut<'a, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB, S> DerefMut for RefMut<'_, Marker, K, KB, VB, S>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
@@ -1093,7 +1093,7 @@ where
     }
 }
 
-impl<'a, Marker, K, KB, VB, S> Debug for RefMut<'a, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB, S> Debug for RefMut<'_, Marker, K, KB, VB, S>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
