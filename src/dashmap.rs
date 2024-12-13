@@ -261,7 +261,7 @@ where
     /// map.insert(Key(3), 4);
     /// assert_eq!(*map.get(&Key(3)).unwrap(), 4);
     /// ```
-    pub fn get<K>(&self, key: &K) -> Option<Ref<'_, Marker, K, KB, VB, S>>
+    pub fn get<K>(&self, key: &K) -> Option<Ref<'_, Marker, K, KB, VB>>
     where
         K: 'static + TypedMapKey<Marker>,
         KB: HasBounds<K>,
@@ -295,7 +295,7 @@ where
     /// *map.get_mut(&Key(3)).unwrap() = 5;
     /// assert_eq!(*map.get(&Key(3)).unwrap().value(), 5);
     /// ```
-    pub fn get_mut<K>(&self, key: &K) -> Option<RefMut<'_, Marker, K, KB, VB, S>>
+    pub fn get_mut<K>(&self, key: &K) -> Option<RefMut<'_, Marker, K, KB, VB>>
     where
         K: 'static + TypedMapKey<Marker>,
         KB: HasBounds<K>,
@@ -596,7 +596,7 @@ where
     /// assert_eq!(letters.get(&Key('u')).unwrap().value(), &1);
     /// assert!(letters.get(&Key('y')).is_none());
     /// ```
-    pub fn entry<K>(&self, key: K) -> dashentry::Entry<'_, K, KB, VB, Marker, S>
+    pub fn entry<K>(&self, key: K) -> dashentry::Entry<'_, K, KB, VB, Marker>
     where
         K: 'static + TypedMapKey<Marker>,
         KB: HasBounds<K>,
@@ -695,7 +695,7 @@ where
     VB: 'static + Bounds,
     S: BuildHasher + Clone,
 {
-    type Item = TypedKeyValueGuard<'a, Marker, KB, VB, S>;
+    type Item = TypedKeyValueGuard<'a, Marker, KB, VB>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let key_value = self.0.next()?;
@@ -706,16 +706,15 @@ where
     }
 }
 
-pub struct TypedKeyValueGuard<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds, S> {
-    key_value: dashmap::mapref::multiple::RefMulti<'a, TypedKey<KB>, TypedMapValue<VB>, S>,
+pub struct TypedKeyValueGuard<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds> {
+    key_value: dashmap::mapref::multiple::RefMulti<'a, TypedKey<KB>, TypedMapValue<VB>>,
     _marker: PhantomData<Marker>,
 }
 
-impl<Marker, KB, VB, S> TypedKeyValueGuard<'_, Marker, KB, VB, S>
+impl<Marker, KB, VB> TypedKeyValueGuard<'_, Marker, KB, VB>
 where
     KB: 'static + Bounds,
     VB: 'static + Bounds,
-    S: BuildHasher,
 {
     /// Downcast key to reference of `K`. Returns `None` if not possible.
     pub fn downcast_key_ref<K: 'static + TypedMapKey<Marker>>(&self) -> Option<&'_ K>
@@ -755,7 +754,7 @@ where
 }
 
 #[cfg(feature = "clone")]
-impl<M, KB: Bounds, VB: Bounds, S: BuildHasher> TypedKeyValueGuard<'_, M, KB, VB, S>
+impl<M, KB: Bounds, VB: Bounds> TypedKeyValueGuard<'_, M, KB, VB>
 where
     KB::KeyContainer: crate::clone::CloneAny,
     VB::Container: crate::clone::CloneAny,
@@ -837,7 +836,7 @@ where
     VB: 'static + Bounds,
     S: BuildHasher + Clone,
 {
-    type Item = TypedKeyValueMutGuard<'a, Marker, KB, VB, S>;
+    type Item = TypedKeyValueMutGuard<'a, Marker, KB, VB>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let key_value = self.0.next()?;
@@ -848,16 +847,15 @@ where
     }
 }
 
-pub struct TypedKeyValueMutGuard<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds, S> {
-    key_value: dashmap::mapref::multiple::RefMutMulti<'a, TypedKey<KB>, TypedMapValue<VB>, S>,
+pub struct TypedKeyValueMutGuard<'a, Marker, KB: 'static + Bounds, VB: 'static + Bounds> {
+    key_value: dashmap::mapref::multiple::RefMutMulti<'a, TypedKey<KB>, TypedMapValue<VB>>,
     _marker: PhantomData<Marker>,
 }
 
-impl<Marker, KB, VB, S> TypedKeyValueMutGuard<'_, Marker, KB, VB, S>
+impl<Marker, KB, VB> TypedKeyValueMutGuard<'_, Marker, KB, VB>
 where
     KB: 'static + Bounds,
     VB: 'static + Bounds,
-    S: BuildHasher,
 {
     /// Downcast key to reference of `K`. Returns `None` if not possible.
     pub fn downcast_key_ref<K: 'static + TypedMapKey<Marker>>(&self) -> Option<&'_ K>
@@ -921,7 +919,7 @@ where
 }
 
 #[cfg(feature = "clone")]
-impl<M, KB: Bounds, VB: Bounds, S: BuildHasher> TypedKeyValueMutGuard<'_, M, KB, VB, S>
+impl<M, KB: Bounds, VB: Bounds> TypedKeyValueMutGuard<'_, M, KB, VB>
 where
     KB::KeyContainer: crate::clone::CloneAny,
     VB::Container: crate::clone::CloneAny,
@@ -959,8 +957,8 @@ where
 }
 
 /// An immutable reference
-pub struct Ref<'a, Marker, K, KB, VB, S>(
-    dashmap::mapref::one::Ref<'a, TypedKey<KB>, TypedMapValue<VB>, S>,
+pub struct Ref<'a, Marker, K, KB, VB>(
+    dashmap::mapref::one::Ref<'a, TypedKey<KB>, TypedMapValue<VB>>,
     std::marker::PhantomData<K>,
     std::marker::PhantomData<Marker>,
 )
@@ -969,12 +967,11 @@ where
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>;
 
-impl<Marker, K, KB, VB, S> Ref<'_, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB> Ref<'_, Marker, K, KB, VB>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
     pub fn key(&self) -> &K {
         self.0.key().downcast_ref::<K>().expect(INVALID_KEY)
@@ -992,12 +989,11 @@ where
     }
 }
 
-impl<Marker, K, KB, VB, S> Deref for Ref<'_, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB> Deref for Ref<'_, Marker, K, KB, VB>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
     type Target = K::Value;
 
@@ -1006,12 +1002,11 @@ where
     }
 }
 
-impl<Marker, K, KB, VB, S> Debug for Ref<'_, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB> Debug for Ref<'_, Marker, K, KB, VB>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         f.write_str("Ref")
@@ -1019,23 +1014,21 @@ where
 }
 
 /// A mutable reference
-pub struct RefMut<'a, Marker, K, KB, VB, S>(
-    pub(crate) dashmap::mapref::one::RefMut<'a, TypedKey<KB>, TypedMapValue<VB>, S>,
+pub struct RefMut<'a, Marker, K, KB, VB>(
+    pub(crate) dashmap::mapref::one::RefMut<'a, TypedKey<KB>, TypedMapValue<VB>>,
     pub(crate) PhantomData<K>,
     pub(crate) PhantomData<Marker>,
 )
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
-    VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher;
+    VB: 'static + Bounds + HasBounds<K::Value>;
 
-impl<Marker, K, KB, VB, S> RefMut<'_, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB> RefMut<'_, Marker, K, KB, VB>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
     pub fn key(&self) -> &K {
         self.0.key().downcast_ref::<K>().expect(INVALID_KEY)
@@ -1067,12 +1060,11 @@ where
     }
 }
 
-impl<Marker, K, KB, VB, S> Deref for RefMut<'_, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB> Deref for RefMut<'_, Marker, K, KB, VB>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
     type Target = K::Value;
 
@@ -1081,24 +1073,22 @@ where
     }
 }
 
-impl<Marker, K, KB, VB, S> DerefMut for RefMut<'_, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB> DerefMut for RefMut<'_, Marker, K, KB, VB>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.value_mut()
     }
 }
 
-impl<Marker, K, KB, VB, S> Debug for RefMut<'_, Marker, K, KB, VB, S>
+impl<Marker, K, KB, VB> Debug for RefMut<'_, Marker, K, KB, VB>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         f.write_str("RefMut")

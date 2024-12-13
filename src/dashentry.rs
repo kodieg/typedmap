@@ -1,5 +1,5 @@
 //! Entry type for TypedDashMap
-use std::{hash::BuildHasher, marker::PhantomData};
+use std::marker::PhantomData;
 
 use crate::bounds::{Bounds, HasBounds};
 use crate::typedvalue::TypedMapValue;
@@ -8,27 +8,25 @@ use crate::{dashmap::RefMut, typedkey::TypedKey};
 
 const INVALID_ENTRY: &str = "Broken TypedDashMap: invalid entry";
 
-pub struct OccupiedEntry<'a, K, KB, VB, Marker, S>
+pub struct OccupiedEntry<'a, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
-    base: dashmap::mapref::entry::OccupiedEntry<'a, TypedKey<KB>, TypedMapValue<VB>, S>,
+    base: dashmap::mapref::entry::OccupiedEntry<'a, TypedKey<KB>, TypedMapValue<VB>>,
     _phantom: PhantomData<Marker>,
     _phantom_key: PhantomData<K>,
 }
 
-impl<'a, K, KB, VB, Marker, S> OccupiedEntry<'a, K, KB, VB, Marker, S>
+impl<'a, K, KB, VB, Marker> OccupiedEntry<'a, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
     #[inline]
-    pub fn into_ref(self) -> RefMut<'a, Marker, K, KB, VB, S> {
+    pub fn into_ref(self) -> RefMut<'a, Marker, K, KB, VB> {
         let refmut = self.base.into_ref();
 
         RefMut(refmut, PhantomData, PhantomData)
@@ -81,24 +79,22 @@ where
     }
 }
 
-pub struct VacantEntry<'a, K, KB, VB, Marker, S>
+pub struct VacantEntry<'a, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
-    base: dashmap::mapref::entry::VacantEntry<'a, TypedKey<KB>, TypedMapValue<VB>, S>,
+    base: dashmap::mapref::entry::VacantEntry<'a, TypedKey<KB>, TypedMapValue<VB>>,
     _phantom: PhantomData<Marker>,
     _phantom_key: PhantomData<K>,
 }
 
-impl<'a, K, KB, VB, Marker, S> VacantEntry<'a, K, KB, VB, Marker, S>
+impl<'a, K, KB, VB, Marker> VacantEntry<'a, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
     #[inline]
     pub fn key(&self) -> &K {
@@ -111,7 +107,7 @@ where
     }
 
     #[inline]
-    pub fn insert(self, value: K::Value) -> RefMut<'a, Marker, K, KB, VB, S> {
+    pub fn insert(self, value: K::Value) -> RefMut<'a, Marker, K, KB, VB> {
         let value = TypedMapValue::from_value(value);
         let refmut = self.base.insert(value);
 
@@ -119,25 +115,23 @@ where
     }
 }
 
-pub enum Entry<'a, K, KB, VB, Marker, S>
+pub enum Entry<'a, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
-    Occupied(OccupiedEntry<'a, K, KB, VB, Marker, S>),
-    Vacant(VacantEntry<'a, K, KB, VB, Marker, S>),
+    Occupied(OccupiedEntry<'a, K, KB, VB, Marker>),
+    Vacant(VacantEntry<'a, K, KB, VB, Marker>),
 }
 
-pub(crate) fn map_entry<Marker, K, KB, VB, S>(
-    entry: dashmap::mapref::entry::Entry<'_, TypedKey<KB>, TypedMapValue<VB>, S>,
-) -> Entry<'_, K, KB, VB, Marker, S>
+pub(crate) fn map_entry<Marker, K, KB, VB>(
+    entry: dashmap::mapref::entry::Entry<'_, TypedKey<KB>, TypedMapValue<VB>>,
+) -> Entry<'_, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
     match entry {
         dashmap::mapref::entry::Entry::Occupied(base) => Entry::Occupied(OccupiedEntry {
@@ -153,15 +147,14 @@ where
     }
 }
 
-impl<'a, Marker, K, KB, VB, S> Entry<'a, K, KB, VB, Marker, S>
+impl<'a, Marker, K, KB, VB> Entry<'a, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
     #[inline]
-    pub fn or_insert(self, default: K::Value) -> RefMut<'a, Marker, K, KB, VB, S> {
+    pub fn or_insert(self, default: K::Value) -> RefMut<'a, Marker, K, KB, VB> {
         match self {
             Self::Occupied(entry) => entry.into_ref(),
             Self::Vacant(entry) => entry.insert(default),
@@ -172,7 +165,7 @@ where
     pub fn or_insert_with<F: FnOnce() -> K::Value>(
         self,
         default: F,
-    ) -> RefMut<'a, Marker, K, KB, VB, S> {
+    ) -> RefMut<'a, Marker, K, KB, VB> {
         match self {
             Self::Occupied(entry) => entry.into_ref(),
             Self::Vacant(entry) => entry.insert(default()),
@@ -200,15 +193,14 @@ where
     }
 }
 
-impl<'a, Marker, K, KB, VB, S> Entry<'a, K, KB, VB, Marker, S>
+impl<'a, Marker, K, KB, VB> Entry<'a, K, KB, VB, Marker>
 where
     K: 'static + TypedMapKey<Marker>,
     K::Value: 'static + Default,
     KB: 'static + Bounds + HasBounds<K>,
     VB: 'static + Bounds + HasBounds<K::Value>,
-    S: BuildHasher,
 {
-    pub fn or_default(self) -> RefMut<'a, Marker, K, KB, VB, S> {
+    pub fn or_default(self) -> RefMut<'a, Marker, K, KB, VB> {
         match self {
             Self::Occupied(entry) => entry.into_ref(),
             Self::Vacant(entry) => entry.insert(Default::default()),
