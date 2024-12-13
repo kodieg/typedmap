@@ -33,3 +33,8 @@ Use AnyBounds or SyncAnyBounds when migrating from 0.3.x version.
 - Added Debug impl for TypedMap and TypedDashMap 
 - Added `insert_key_value` functions for TypedMap and TypedDashMap
 - Added Clone impl for TypedMap and TypedDashMap when key and values are cloneable 
+
+# 0.6.0 (Dec 13, 2024)
+
+- Fix clippy warnings ([PR 15](https://github.com/kodieg/typedmap/pull/16))
+- Upgrade dashmap dependency from 5.5.3 to 6.1.0 ([PR 16](https://github.com/kodieg/typedmap/pull/16))
